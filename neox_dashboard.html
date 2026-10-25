@@ -1,0 +1,1151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>NeoX — Clinical Bilirubin Screening</title>
+<style>
+/* ═══════════════════════════════════════
+   DESIGN TOKENS
+   Minimalist black + navy palette
+   Clinical colours per bilirubin zone
+═══════════════════════════════════════ */
+:root{
+  /* backgrounds */
+  --bg-base:     #070b12;
+  --bg-surface:  #0d1421;
+  --bg-card:     #111927;
+  --bg-inset:    #0a0f1a;
+
+  /* borders */
+  --border:      #1e2d45;
+  --border-hi:   #2a3f5e;
+
+  /* text */
+  --text-primary:   #e8edf5;
+  --text-secondary: #7a90b0;
+  --text-dim:       #3d5270;
+
+  /* accent */
+  --accent:      #2563eb;
+  --accent-glow: rgba(37,99,235,0.18);
+
+  /* clinical zone colours */
+  --c-normal:    #10b981;  /* emerald  — 0–5  mg/dL  */
+  --c-mild:      #f59e0b;  /* amber    — 5–12 mg/dL  */
+  --c-moderate:  #ef4444;  /* red      — 12–17 mg/dL */
+  --c-critical:  #dc2626;  /* deep red — >17  mg/dL  */
+
+  --bg-normal:   rgba(16,185,129,0.10);
+  --bg-mild:     rgba(245,158,11,0.10);
+  --bg-moderate: rgba(239,68,68,0.10);
+  --bg-critical: rgba(220,38,38,0.15);
+
+  --border-normal:   rgba(16,185,129,0.35);
+  --border-mild:     rgba(245,158,11,0.35);
+  --border-moderate: rgba(239,68,68,0.35);
+  --border-critical: rgba(220,38,38,0.50);
+
+  /* ML purple */
+  --ml:     #818cf8;
+  --ml-bg:  rgba(129,140,248,0.10);
+  --ml-brd: rgba(129,140,248,0.30);
+
+  /* channels */
+  --blue-ch:  #60a5fa;
+  --red-ch:   #f87171;
+  --green-ch: #34d399;
+  --grey-ch:  #94a3b8;
+}
+
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Segoe UI',Arial,sans-serif;background:var(--bg-base);color:var(--text-primary);min-height:100vh;font-size:14px}
+
+/* ── SCROLLBAR ── */
+::-webkit-scrollbar{width:6px;height:6px}
+::-webkit-scrollbar-track{background:var(--bg-base)}
+::-webkit-scrollbar-thumb{background:var(--border-hi);border-radius:3px}
+
+/* ── HEADER ── */
+header{
+  background:var(--bg-surface);
+  border-bottom:1px solid var(--border);
+  padding:0 28px;
+  height:56px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  position:sticky;top:0;z-index:100;
+}
+.logo{display:flex;align-items:center;gap:12px}
+.logo-mark{
+  width:36px;height:36px;border-radius:8px;
+  background:linear-gradient(135deg,#1d4ed8,#2563eb);
+  display:flex;align-items:center;justify-content:center;
+  font-weight:800;font-size:16px;color:#fff;letter-spacing:-1px;
+}
+.logo-name{font-size:17px;font-weight:700;color:var(--text-primary);letter-spacing:.5px}
+.logo-sub{font-size:11px;color:var(--text-secondary);margin-top:1px}
+.hdr-right{display:flex;align-items:center;gap:16px}
+.live-pill{
+  display:flex;align-items:center;gap:6px;
+  background:rgba(16,185,129,0.12);border:1px solid rgba(16,185,129,0.30);
+  border-radius:20px;padding:4px 12px;font-size:12px;color:var(--c-normal);
+}
+.live-dot{width:7px;height:7px;background:var(--c-normal);border-radius:50%;animation:blink-dot 1.4s infinite}
+@keyframes blink-dot{0%,100%{opacity:1}50%{opacity:.3}}
+.clock{font-size:13px;color:var(--text-secondary);font-variant-numeric:tabular-nums}
+
+/* ── NAV TABS ── */
+.nav{
+  background:var(--bg-surface);
+  border-bottom:1px solid var(--border);
+  padding:0 28px;
+  display:flex;gap:0;
+}
+.tab-btn{
+  background:none;border:none;border-bottom:2px solid transparent;
+  color:var(--text-secondary);padding:12px 20px;font-size:13px;
+  cursor:pointer;transition:all .2s;white-space:nowrap;
+}
+.tab-btn:hover{color:var(--text-primary)}
+.tab-btn.active{color:var(--accent);border-bottom-color:var(--accent)}
+
+/* ── PAGE WRAPPER ── */
+.page{display:none;padding:24px 28px;max-width:1200px;margin:0 auto}
+.page.active{display:block}
+
+/* ── PATIENT BAR ── */
+.patient-bar{
+  background:var(--bg-card);border:1px solid var(--border);
+  border-radius:10px;padding:14px 20px;margin-bottom:18px;
+  display:flex;align-items:flex-end;gap:16px;flex-wrap:wrap;
+}
+.pf label{font-size:11px;color:var(--text-secondary);display:block;margin-bottom:4px;letter-spacing:.5px;text-transform:uppercase}
+.pf input,.pf select{
+  background:var(--bg-inset);border:1px solid var(--border-hi);
+  border-radius:6px;color:var(--text-primary);padding:7px 11px;
+  font-size:13px;outline:none;width:100%;
+}
+.pf input:focus,.pf select:focus{border-color:var(--accent)}
+.pf{flex:1;min-width:130px}
+.pf-sm{flex:0 0 120px}
+.btn-primary{
+  background:var(--accent);border:none;border-radius:6px;
+  color:#fff;padding:8px 20px;font-size:13px;font-weight:600;cursor:pointer;
+  transition:background .2s;white-space:nowrap;
+}
+.btn-primary:hover{background:#1d4ed8}
+.btn-ghost{
+  background:transparent;border:1px solid var(--border-hi);
+  border-radius:6px;color:var(--text-secondary);
+  padding:8px 14px;font-size:13px;cursor:pointer;transition:all .2s;
+}
+.btn-ghost:hover{border-color:var(--accent);color:var(--accent)}
+
+/* ── ALERT BAR ── */
+.alert{
+  border-radius:8px;padding:10px 16px;margin-bottom:18px;
+  font-size:13px;font-weight:500;display:flex;align-items:center;gap:10px;
+}
+.al-normal  {background:var(--bg-normal);  border:1px solid var(--border-normal);  color:var(--c-normal)}
+.al-mild    {background:var(--bg-mild);    border:1px solid var(--border-mild);    color:var(--c-mild)}
+.al-moderate{background:var(--bg-moderate);border:1px solid var(--border-moderate);color:var(--c-moderate)}
+.al-critical{background:var(--bg-critical);border:1px solid var(--border-critical);color:var(--c-critical);animation:flash .7s infinite}
+@keyframes flash{0%,100%{opacity:1}50%{opacity:.65}}
+
+/* ── METRIC GRID ── */
+.metric-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:18px}
+.mcard{background:var(--bg-card);border:1px solid var(--border);border-radius:10px;padding:16px 18px}
+.mcard.accent-card{border-color:rgba(37,99,235,.4);background:linear-gradient(135deg,#0a1628,#0d1f3c)}
+.mcard.ml-accent{border-color:var(--ml-brd);background:var(--ml-bg)}
+.mc-label{font-size:10px;color:var(--text-secondary);letter-spacing:.8px;text-transform:uppercase;margin-bottom:8px}
+.mc-val{font-size:38px;font-weight:700;line-height:1;letter-spacing:-1px}
+.mc-unit{font-size:11px;color:var(--text-secondary);margin-top:5px}
+.col-accent{color:#60a5fa}
+.col-ml    {color:var(--ml)}
+.col-green {color:var(--green-ch)}
+.col-red   {color:var(--red-ch)}
+.col-blue  {color:var(--blue-ch)}
+.col-amber {color:var(--c-mild)}
+.col-normal  {color:var(--c-normal)}
+.col-mild    {color:var(--c-mild)}
+.col-moderate{color:var(--c-moderate)}
+.col-critical{color:var(--c-critical)}
+
+/* ── RISK ZONE BAR ── */
+.risk-wrap{background:var(--bg-card);border:1px solid var(--border);border-radius:10px;padding:18px 20px;margin-bottom:18px}
+.risk-title{font-size:12px;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.7px;margin-bottom:14px}
+.risk-track{position:relative;height:20px;border-radius:10px;overflow:hidden;
+  background:linear-gradient(to right,
+    var(--c-normal) 0% 22%,
+    var(--c-mild) 22% 54%,
+    var(--c-moderate) 54% 77%,
+    var(--c-critical) 77% 100%);
+  opacity:.7;
+}
+.risk-needle{position:absolute;top:-2px;width:4px;height:calc(100%+4px);background:#fff;border-radius:2px;transition:left .6s ease;box-shadow:0 0 6px rgba(255,255,255,.7)}
+.risk-scale{display:flex;justify-content:space-between;margin-top:6px;font-size:10px;color:var(--text-secondary)}
+.zone-pills{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:14px}
+.zpill{border-radius:8px;padding:10px 12px;text-align:center;border:1px solid;transition:all .2s}
+.zpill.zp-normal  {background:var(--bg-normal);  border-color:var(--border-normal);  }
+.zpill.zp-mild    {background:var(--bg-mild);    border-color:var(--border-mild);    }
+.zpill.zp-moderate{background:var(--bg-moderate);border-color:var(--border-moderate);}
+.zpill.zp-critical{background:var(--bg-critical);border-color:var(--border-critical);}
+.zpill.active{transform:scale(1.04);box-shadow:0 0 0 2px rgba(255,255,255,.15)}
+.zp-name{font-size:12px;font-weight:600}
+.zp-range{font-size:10px;color:var(--text-secondary);margin-top:2px}
+.zp-action{font-size:10px;margin-top:5px;font-weight:500}
+.zp-normal   .zp-name,.zp-normal   .zp-action{color:var(--c-normal)}
+.zp-mild     .zp-name,.zp-mild     .zp-action{color:var(--c-mild)}
+.zp-moderate .zp-name,.zp-moderate .zp-action{color:var(--c-moderate)}
+.zp-critical .zp-name,.zp-critical .zp-action{color:var(--c-critical)}
+
+/* ── TWO COL ── */
+.two-col{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:18px}
+@media(max-width:700px){.two-col{grid-template-columns:1fr}}
+
+/* ── PANEL ── */
+.panel{background:var(--bg-card);border:1px solid var(--border);border-radius:10px;padding:16px 20px}
+.panel-title{font-size:13px;font-weight:600;margin-bottom:14px;display:flex;align-items:center;justify-content:space-between}
+.panel-sub{font-size:11px;color:var(--text-secondary);font-weight:400}
+
+/* ── CHANNELS ── */
+.ch-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.ch-item{background:var(--bg-inset);border-radius:8px;padding:12px}
+.ch-lbl{font-size:10px;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.6px;margin-bottom:5px}
+.ch-num{font-size:22px;font-weight:700}
+.ch-bar{height:3px;border-radius:2px;margin-top:8px;background:var(--border);overflow:hidden}
+.ch-fill{height:100%;border-radius:2px;transition:width .4s}
+
+/* ── SKIN DEMO ── */
+.skin-demo{background:var(--bg-card);border:1px solid var(--border);border-radius:10px;padding:16px 20px;margin-bottom:18px}
+.skin-row{display:grid;grid-template-columns:1fr 60px 1fr;gap:12px;margin-top:12px;align-items:center}
+.skin-cell{background:var(--bg-inset);border-radius:8px;padding:14px;text-align:center}
+.sc-lbl{font-size:10px;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.6px;margin-bottom:6px}
+.sc-val{font-size:26px;font-weight:700}
+.sc-sub{font-size:10px;color:var(--text-secondary);margin-top:4px}
+.arrow-mid{text-align:center;color:var(--text-dim)}
+.arrow-mid .arr{font-size:22px}
+.arrow-mid .albl{font-size:9px;color:var(--ml);margin-top:2px;font-weight:600}
+
+/* ══════════════════════════════
+   ML TAB
+══════════════════════════════ */
+.ml-hero{
+  background:linear-gradient(135deg,#0a0d1f,#0d1128);
+  border:1px solid var(--ml-brd);border-radius:12px;
+  padding:22px 24px;margin-bottom:18px;
+}
+.ml-hero-header{display:flex;align-items:center;gap:12px;margin-bottom:18px}
+.ml-badge{background:rgba(129,140,248,.15);border:1px solid var(--ml-brd);color:var(--ml);font-size:11px;font-weight:600;padding:3px 10px;border-radius:10px}
+.ml-result-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:12px;margin-bottom:18px}
+.ml-cell{background:var(--bg-inset);border-radius:8px;padding:14px;text-align:center}
+.ml-cell .mclbl{font-size:10px;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.6px;margin-bottom:6px}
+.ml-cell .mcval{font-size:28px;font-weight:700}
+.ml-formula{
+  background:var(--bg-inset);border-radius:8px;padding:14px 16px;
+  font-family:'Courier New',monospace;font-size:12px;line-height:2.1;
+  color:var(--text-secondary);
+}
+.ml-formula .kw{color:var(--ml)}
+.ml-formula .num{color:var(--blue-ch)}
+.ml-formula .eq{color:var(--green-ch)}
+
+.manual-box{background:var(--bg-card);border:1px solid var(--border);border-radius:10px;padding:18px 20px;margin-bottom:18px}
+.manual-inputs{display:grid;grid-template-columns:1fr 1fr auto;gap:12px;align-items:flex-end;margin-top:14px}
+.fi label{font-size:11px;color:var(--text-secondary);display:block;margin-bottom:4px;letter-spacing:.5px}
+.fi input{background:var(--bg-inset);border:1px solid var(--border-hi);border-radius:6px;color:var(--text-primary);padding:8px 10px;font-size:13px;outline:none;width:100%}
+.fi input:focus{border-color:var(--accent)}
+.manual-result{background:var(--bg-inset);border-radius:8px;padding:12px 14px;margin-top:14px;min-height:44px;font-size:13px;color:var(--text-secondary)}
+
+.feat-panel{background:var(--bg-card);border:1px solid var(--border);border-radius:10px;padding:18px 20px;margin-bottom:18px}
+
+/* ══════════════════════════════
+   CALIBRATION TAB
+══════════════════════════════ */
+.calib-layout{display:grid;grid-template-columns:2fr 1fr;gap:16px;margin-bottom:18px}
+@media(max-width:700px){.calib-layout{grid-template-columns:1fr}}
+.metrics-stack{display:flex;flex-direction:column;gap:8px}
+.mrow{background:var(--bg-card);border:1px solid var(--border);border-radius:8px;padding:12px 14px;display:flex;justify-content:space-between;align-items:center}
+.mrow-key{font-size:12px;color:var(--text-secondary)}
+.mrow-val{font-size:18px;font-weight:700;color:var(--ml)}
+
+.phantom-wrap{background:var(--bg-card);border:1px solid var(--border);border-radius:10px;padding:16px 20px;margin-bottom:18px;overflow-x:auto}
+.ptable{width:100%;border-collapse:collapse;font-size:12px}
+.ptable th{text-align:left;color:var(--text-secondary);padding:8px 10px;border-bottom:1px solid var(--border);font-weight:500;text-transform:uppercase;letter-spacing:.5px;font-size:10px}
+.ptable td{padding:8px 10px;border-bottom:1px solid var(--border);color:var(--text-primary)}
+.ptable tr:last-child td{border-bottom:none}
+.ptable tr:hover td{background:var(--bg-inset)}
+
+.calib-controls{display:flex;align-items:center;gap:10px;flex-wrap:wrap;justify-content:space-between;margin:0 0 14px}
+.calib-controls input{flex:1 1 250px;min-width:175px;max-width:460px;background:var(--bg-inset);color:var(--text-primary);border:1px solid var(--border-hi);border-radius:7px;padding:9px 11px;outline:none}
+.calib-controls input:focus{border-color:var(--accent)}
+.calib-actions{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+.calib-pagination{display:flex;justify-content:flex-end;align-items:center;gap:12px;padding-top:16px}
+.calib-pagination button:disabled{opacity:0.35;cursor:not-allowed}
+/* ══════════════════════════════
+   LOG TAB
+══════════════════════════════ */
+.log-wrap{background:var(--bg-card);border:1px solid var(--border);border-radius:10px;padding:16px 20px;overflow-x:auto}
+.ltable{width:100%;border-collapse:collapse;font-size:12px}
+.ltable th{text-align:left;color:var(--text-secondary);padding:8px 10px;border-bottom:1px solid var(--border);font-weight:500;font-size:10px;text-transform:uppercase;letter-spacing:.5px}
+.ltable td{padding:8px 10px;border-bottom:1px solid var(--border);color:var(--text-primary)}
+.ltable tr:last-child td{border-bottom:none}
+.ltable tr:hover td{background:var(--bg-inset)}
+.badge{display:inline-block;font-size:10px;font-weight:700;padding:2px 9px;border-radius:10px;letter-spacing:.3px}
+.badge-normal  {background:var(--bg-normal);  color:var(--c-normal);  border:1px solid var(--border-normal)}
+.badge-mild    {background:var(--bg-mild);    color:var(--c-mild);    border:1px solid var(--border-mild)}
+.badge-moderate{background:var(--bg-moderate);color:var(--c-moderate);border:1px solid var(--border-moderate)}
+.badge-critical{background:var(--bg-critical);color:var(--c-critical);border:1px solid var(--border-critical)}
+
+/* ── FOOTER ── */
+.page-footer{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;padding:14px 0 6px}
+.page-footer p{font-size:11px;color:var(--text-dim)}
+</style>
+</head>
+<body>
+
+<!-- ══════ HEADER ══════ -->
+<header>
+  <div class="logo">
+    <div class="logo-mark">Nx</div>
+    <div>
+      <div class="logo-name">NeoX</div>
+      <div class="logo-sub">Synthetic calibration research · ESP32-compatible</div>
+    </div>
+  </div>
+  <div class="hdr-right">
+    <div class="live-pill"><div class="live-dot"></div>ESP32 mode</div>
+    <div class="clock" id="clock">--:--:--</div>
+  </div>
+</header>
+
+<!-- ══════ NAV ══════ -->
+<div class="nav">
+  <button class="tab-btn active" onclick="showTab('dashboard',this)">Dashboard</button>
+  <button class="tab-btn" onclick="showTab('ml',this)">ML Prediction</button>
+  <button class="tab-btn" onclick="showTab('calib',this)">Calibration Curve</button>
+  <button class="tab-btn" onclick="showTab('log',this)">Reading Log</button>
+</div>
+
+<!-- ══════════════════════════════════════
+     PAGE 1 — DASHBOARD
+══════════════════════════════════════ -->
+<div class="page active" id="page-dashboard">
+
+  <!-- PATIENT BAR -->
+  <div class="patient-bar">
+    <div class="pf" style="min-width:180px">
+      <label>Patient ID / Name</label>
+      <input type="text" id="patName" placeholder="Baby Arjun · INF-001">
+    </div>
+    <div class="pf pf-sm">
+      <label>Age (hours)</label>
+      <input type="number" id="patAge" placeholder="48">
+    </div>
+    <div class="pf pf-sm">
+      <label>Skin tone</label>
+      <select id="skinTone">
+        <option value="1">Fair I–II</option>
+        <option value="2" selected>Medium III–IV</option>
+        <option value="3">Dark V–VI</option>
+      </select>
+    </div>
+    <div style="display:flex;gap:8px;flex-shrink:0">
+      <button class="btn-primary" onclick="takeReading()">▶ Take reading</button>
+      <button class="btn-ghost" onclick="exportCSV()">Export CSV</button>
+      <button class="btn-ghost" onclick="clearAll()">Clear</button>
+    </div>
+  </div>
+
+  <!-- ALERT -->
+  <div class="alert al-normal" id="alertBar">
+    ✓ System ready — place probe on sample and press "Take reading"
+  </div>
+
+  <p style="font-size:11px;color:var(--text-secondary);margin:0 0 13px">Research prototype trained and tested only on synthetic continuous data. Do not use estimates or display bands for diagnosis or treatment decisions.</p>
+
+  <!-- METRIC CARDS -->
+  <div class="metric-grid">
+    <div class="mcard accent-card">
+      <div class="mc-label">ML bilirubin estimate</div>
+      <div class="mc-val col-accent" id="bilVal">—</div>
+      <div class="mc-unit">mg/dL · linear regression model</div>
+    </div>
+    <div class="mcard ml-accent">
+      <div class="mc-label">Model fit (holdout R²)</div>
+      <div class="mc-val col-ml" id="confVal">—</div>
+      <div class="mc-unit">held-out synthetic test fit %, not confidence</div>
+    </div>
+    <div class="mcard">
+      <div class="mc-label">Blue signal</div>
+      <div class="mc-val col-blue" id="sBlue" style="font-size:28px">—</div>
+      <div class="mc-unit">ΔB / ΔG</div>
+    </div>
+    <div class="mcard">
+      <div class="mc-label">Melanin index</div>
+      <div class="mc-val col-red" id="sMel" style="font-size:28px">—</div>
+      <div class="mc-unit">ΔRr / ΔGr · red LED</div>
+    </div>
+    <div class="mcard">
+      <div class="mc-label">Corrected signal</div>
+      <div class="mc-val col-green" id="sCorr" style="font-size:28px">—</div>
+      <div class="mc-unit">S_blue + k·S_mel</div>
+    </div>
+    <div class="mcard">
+      <div class="mc-label">Readings</div>
+      <div class="mc-val" id="readCount" style="font-size:28px">0</div>
+      <div class="mc-unit">this session</div>
+    </div>
+  </div>
+
+  <!-- RISK ZONE BAR -->
+  <div class="risk-wrap">
+    <div class="risk-title">Prototype estimate bands — not clinical thresholds</div>
+    <div class="risk-track">
+      <div class="risk-needle" id="riskNeedle" style="left:0%"></div>
+    </div>
+    <div class="risk-scale">
+      <span>0</span><span>5</span><span>10</span><span>15</span><span>20 mg/dL</span>
+    </div>
+    <div class="zone-pills">
+      <div class="zpill zp-normal" id="z0">
+        <div class="zp-name">Band A</div>
+        <div class="zp-range">0 – 5 mg/dL</div>
+        <div class="zp-action">Demo band only</div>
+      </div>
+      <div class="zpill zp-mild" id="z1">
+        <div class="zp-name">Band B</div>
+        <div class="zp-range">5 – 12 mg/dL</div>
+        <div class="zp-action">Demo band only</div>
+      </div>
+      <div class="zpill zp-moderate" id="z2">
+        <div class="zp-name">Band C</div>
+        <div class="zp-range">12 – 17 mg/dL</div>
+        <div class="zp-action">Demo band only</div>
+      </div>
+      <div class="zpill zp-critical" id="z3">
+        <div class="zp-name">Band D</div>
+        <div class="zp-range">&gt; 17 mg/dL</div>
+        <div class="zp-action">Demo band only</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SKIN CORRECTION DEMO -->
+  <div class="skin-demo">
+    <div class="panel-title">
+      Skin tone correction — live
+      <span class="panel-sub">Red channel provides a melanin-proxy signal</span>
+    </div>
+    <div class="skin-row">
+      <div class="skin-cell">
+        <div class="sc-lbl">Raw S_blue (includes melanin)</div>
+        <div class="sc-val col-blue" id="dRaw">—</div>
+        <div class="sc-sub">melanin + bilirubin mixed</div>
+      </div>
+      <div class="arrow-mid">
+        <div class="arr">→</div>
+        <div class="albl">ML CORRECTION</div>
+      </div>
+      <div class="skin-cell">
+        <div class="sc-lbl">Model-adjusted signal S_corr</div>
+        <div class="sc-val col-green" id="dCorr">—</div>
+        <div class="sc-sub">Model-derived correction; not validated</div>
+      </div>
+    </div>
+    <p style="font-size:11px;color:var(--text-dim);margin-top:10px;text-align:center">
+      S_model_corrected = S_blue + (0.167757 × S_melanin) · Trained on synthetic continuous data
+    </p>
+  </div>
+
+  <!-- TREND + CHANNELS -->
+  <div class="two-col">
+    <div class="panel">
+      <div class="panel-title">
+        Bilirubin trend
+        <span class="panel-sub" id="trendInfo">no readings yet</span>
+      </div>
+      <canvas id="trendChart" height="200"></canvas>
+    </div>
+    <div class="panel">
+      <div class="panel-title">Raw sensor channels</div>
+      <div class="ch-grid">
+        <div class="ch-item">
+          <div class="ch-lbl">ΔBlue (B_on − B_amb)</div>
+          <div class="ch-num col-blue" id="chDB">—</div>
+          <div class="ch-bar"><div class="ch-fill" id="bDB" style="width:0%;background:var(--blue-ch)"></div></div>
+        </div>
+        <div class="ch-item">
+          <div class="ch-lbl">ΔGreen (blue LED ref)</div>
+          <div class="ch-num col-green" id="chDG">—</div>
+          <div class="ch-bar"><div class="ch-fill" id="bDG" style="width:0%;background:var(--green-ch)"></div></div>
+        </div>
+        <div class="ch-item">
+          <div class="ch-lbl">ΔRed (red LED)</div>
+          <div class="ch-num col-red" id="chDR">—</div>
+          <div class="ch-bar"><div class="ch-fill" id="bDR" style="width:0%;background:var(--red-ch)"></div></div>
+        </div>
+        <div class="ch-item">
+          <div class="ch-lbl">Ambient clear (C)</div>
+          <div class="ch-num" style="color:var(--grey-ch)" id="chAmb">—</div>
+          <div class="ch-bar"><div class="ch-fill" id="bAmb" style="width:0%;background:var(--grey-ch)"></div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="page-footer">
+    <p>NeoX Prototype v2.1 · Synthetic research demonstration · Not a validated medical device</p>
+    <button class="btn-ghost" style="font-size:11px;padding:5px 14px" onclick="exportCSV()">Download CSV</button>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════
+     PAGE 2 — ML PREDICTION
+══════════════════════════════════════ -->
+<div class="page" id="page-ml">
+
+  <!-- HERO RESULT BOX -->
+  <div class="ml-hero">
+    <div class="ml-hero-header">
+      <span style="font-size:17px;font-weight:700">ML Prediction Engine</span>
+      <span class="ml-badge">Linear Regression</span>
+      <span style="font-size:11px;color:var(--text-secondary);margin-left:auto">Trained 800 / tested 200 synthetic samples · Test R² = 0.9948</span>
+    </div>
+    <div class="ml-result-row">
+      <div class="ml-cell">
+        <div class="mclbl">Predicted bilirubin</div>
+        <div class="mcval col-accent" id="ml-bili">—</div>
+        <div style="font-size:10px;color:var(--text-secondary);margin-top:4px">mg/dL</div>
+      </div>
+      <div class="ml-cell">
+        <div class="mclbl">Illustrative lower</div>
+        <div class="mcval col-green" id="ml-lo">—</div>
+        <div style="font-size:10px;color:var(--text-secondary);margin-top:4px">mg/dL</div>
+      </div>
+      <div class="ml-cell">
+        <div class="mclbl">Illustrative upper</div>
+        <div class="mcval col-red" id="ml-hi">—</div>
+        <div style="font-size:10px;color:var(--text-secondary);margin-top:4px">mg/dL</div>
+      </div>
+      <div class="ml-cell">
+        <div class="mclbl">RMSE (held-out test)</div>
+        <div class="mcval col-ml">0.41</div>
+        <div style="font-size:10px;color:var(--text-secondary);margin-top:4px">mg/dL</div>
+      </div>
+      <div class="ml-cell">
+        <div class="mclbl">Model R²</div>
+        <div class="mcval col-ml">0.9948</div>
+        <div style="font-size:10px;color:var(--text-secondary);margin-top:4px">goodness of fit</div>
+      </div>
+    </div>
+    <div class="ml-formula">
+      <div><span class="kw">Model:</span>  Bilirubin <span class="eq">=</span> β₀ <span class="eq">+</span> β₁ <span class="eq">×</span> S_corrected</div>
+      <div><span class="kw">Parameters:</span> β₀ <span class="eq">=</span> <span class="num">43.7713</span> &nbsp;·&nbsp; β₁ <span class="eq">=</span> <span class="num">-43.1137</span></div>
+      <div><span class="kw">Melanin correction:</span>  S_corrected <span class="eq">=</span> S_blue <span class="eq">+</span> (<span class="num">0.167757</span> <span class="eq">×</span> S_melanin)</div>
+      <div><span class="kw">Dataset:</span> <span class="num">1,000</span> continuous synthetic samples · 800 train / 200 holdout (not clinical validation)</div>
+    </div>
+  </div>
+
+  <p style="font-size:11px;color:var(--text-secondary);margin:-7px 0 14px">Synthetic data only. Held-out test fit does not establish accuracy on real infants or real sensors. Displayed error ranges are illustrative, not clinical confidence or prediction intervals.</p>
+
+  <!-- MANUAL PREDICT -->
+  <div class="manual-box">
+    <div class="panel-title">Manual prediction — enter sensor signals</div>
+    <div class="manual-inputs">
+      <div class="fi">
+        <label>S_blue (ΔB / ΔG)</label>
+        <input type="number" id="inp-sb" placeholder="e.g. 0.820" step="0.001">
+      </div>
+      <div class="fi">
+        <label>S_melanin (ΔRr / ΔGr)</label>
+        <input type="number" id="inp-sm" placeholder="e.g. 0.700" step="0.001">
+      </div>
+      <button class="btn-primary" onclick="manualPredict()">Predict</button>
+    </div>
+    <div class="manual-result" id="manual-result">
+      Enter values above and press Predict to run the model.
+    </div>
+  </div>
+
+  <!-- FEATURE CONTRIBUTION -->
+  <div class="feat-panel">
+    <div class="panel-title">
+      Model decomposition for current prediction
+      <span class="panel-sub">updates after each reading</span>
+    </div>
+    <canvas id="featChart" height="130"></canvas>
+  </div>
+
+  <!-- ZONE DISTRIBUTION -->
+  <div class="panel" style="margin-bottom:18px">
+    <div class="panel-title">
+      Session demo-band distribution
+      <span class="panel-sub" id="zoneDist">no readings yet</span>
+    </div>
+    <canvas id="zoneChart" height="130"></canvas>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════
+     PAGE 3 — CALIBRATION CURVE
+══════════════════════════════════════ -->
+<div class="page" id="page-calib">
+
+  <div class="calib-layout">
+    <!-- CURVE CHART -->
+    <div class="panel">
+      <div class="panel-title">
+        Calibration curve
+        <span class="panel-sub">Model-adjusted signal vs bilirubin equivalent</span>
+      </div>
+      <canvas id="calibChart" height="280"></canvas>
+      <p style="font-size:11px;color:var(--text-dim);margin-top:8px;text-align:center">
+        1,000 continuous synthetic points · 3 skin tone groups · Held-out test R² = 0.9948
+      </p>
+    </div>
+
+    <!-- MODEL METRICS -->
+    <div class="metrics-stack">
+      <div class="mrow"><span class="mrow-key">R² (held-out test)</span><span class="mrow-val">0.9948</span></div>
+      <div class="mrow"><span class="mrow-key">RMSE (held-out test)</span><span class="mrow-val">0.408 mg/dL</span></div>
+      <div class="mrow"><span class="mrow-key">MAE (held-out test)</span><span class="mrow-val">0.327 mg/dL</span></div>
+      <div class="mrow"><span class="mrow-key">Calibration samples</span><span class="mrow-val">1,000</span></div>
+      <div class="mrow"><span class="mrow-key">Slope β₁</span><span class="mrow-val">-43.1137</span></div>
+      <div class="mrow"><span class="mrow-key">Intercept β₀</span><span class="mrow-val">43.7713</span></div>
+      <div class="mrow"><span class="mrow-key">Melanin factor k</span><span class="mrow-val">+0.167757</span></div>
+      <div class="mrow"><span class="mrow-key">Illustrative ±1.96×test RMSE*</span><span class="mrow-val">±0.80 mg/dL</span></div>
+    </div>
+  </div>
+
+  <p style="font-size:11px;color:var(--text-secondary);margin-bottom:14px">*Illustrative band is based on 200 held-out synthetic samples. Not a calibrated clinical interval. Source S_Corrected from the CSV is preserved separately; the model uses its own fitted correction (S_blue + k×S_melanin).</p>
+
+  <!-- RESIDUAL CHART -->
+  <div class="panel" style="margin-bottom:18px">
+    <div class="panel-title">Residual plot — 1,000 predictions against actual values</div>
+    <canvas id="residChart" height="160"></canvas>
+  </div>
+
+  <!-- PHANTOM TABLE -->
+  <div class="phantom-wrap">
+    <div class="panel-title" style="margin-bottom:14px">
+      Continuous calibration dataset
+      <span class="panel-sub">800 training + 200 held-out test samples · 25 rows per page</span>
+    </div>
+    <div class="calib-controls">
+      <input id="sampleSearch" type="search" placeholder="Search sample ID, skin tone, or train/test split" aria-label="Search calibration data" oninput="filterPhantomTable()">
+      <div class="calib-actions">
+        <span id="sampleStatus" class="panel-sub">1,000 samples</span>
+        <button class="btn-ghost" onclick="downloadCalibrationCSV()">Export calibration CSV</button>
+      </div>
+    </div>
+    <table class="ptable">
+      <thead>
+        <tr>
+          <th>ID</th><th>Tartrazine (mM)</th><th>Bili equiv (mg/dL)</th>
+          <th>Skin tone</th><th>S_blue</th><th>S_melanin</th>
+          <th>Model S_corr</th><th>ML predicted</th><th>Residual</th><th>Split</th>
+        </tr>
+      </thead>
+      <tbody id="phantomTable"></tbody>
+    </table>
+    <div class="calib-pagination">
+      <button class="btn-ghost" id="prevCalibPage" onclick="changeCalibPage(-1)">← Previous</button>
+      <span id="calibPageIndicator" class="panel-sub">Page 1</span>
+      <button class="btn-ghost" id="nextCalibPage" onclick="changeCalibPage(1)">Next →</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════
+     PAGE 4 — READING LOG
+══════════════════════════════════════ -->
+<div class="page" id="page-log">
+  <div class="log-wrap">
+    <div class="panel-title" style="margin-bottom:14px">
+      Session reading log
+      <span class="panel-sub" id="logCount">0 entries</span>
+    </div>
+    <table class="ltable">
+      <thead>
+        <tr>
+          <th>#</th><th>Time</th><th>Patient</th>
+          <th>S_blue</th><th>S_melanin</th><th>S_corr</th>
+          <th>ML bili (mg/dL)</th><th>Illustrative range</th><th>Zone</th>
+        </tr>
+      </thead>
+      <tbody id="logBody">
+        <tr><td colspan="9" style="text-align:center;color:var(--text-dim);padding:28px">No readings yet — go to Dashboard and press "Take reading"</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<script>
+// ══════════════════════════════════════════
+//  ML MODEL — Phantom-trained linear regression
+// ══════════════════════════════════════════
+// Trained on 800 synthetic continuous samples; evaluated on 200 held-out samples.
+// Correction convention: S_corrected = S_Blue + k*S_Melanin.
+var M = {"b0":43.77131883335552,"b1":-43.11374712782588,"k":0.16775695325293496,"rmse":0.40757200514213043,"mae":0.32717100942707733,"r2":0.9948453888802344,"trainR2":0.9954805579918653,"trainRmse":0.3952636615689142,"trainN":800,"testN":200};
+
+// Schema: [Sample_ID, Dataset_Type, Tartrazine_mM, Bili_Equiv_mg_dL, Skin_Tone, S_Blue, S_Melanin, Source_S_Corrected, Split].
+// Source S_Corrected differs from recalculated model-corrected signal: raw source CSV is unchanged.
+var PD = [["SYN_CONT_0001","continuous",0.1248,7.49,"Dark",0.6616,1.0765,0.3451,"train"],["SYN_CONT_0002","continuous",0.3314,19.01,"Medium",0.4478,0.7039,0.2423,"test"],["SYN_CONT_0003","continuous",0.2495,14.64,"Dark",0.4909,1.1066,0.1659,"test"],["SYN_CONT_0004","continuous",0.1995,11.97,"Dark",0.5526,1.1052,0.2215,"train"],["SYN_CONT_0005","continuous",0.052,3.12,"Fair",0.8735,0.4291,0.7532,"train"],["SYN_CONT_0006","continuous",0.052,3.12,"Fair",0.8771,0.4289,0.7511,"train"],["SYN_CONT_0007","continuous",0.0193,1.16,"Dark",0.8181,1.0894,0.4819,"train"],["SYN_CONT_0008","continuous",0.2997,17.32,"Fair",0.5365,0.4127,0.4175,"train"],["SYN_CONT_0009","continuous",0.2004,12.02,"Medium",0.6087,0.7081,0.401,"train"],["SYN_CONT_0010","continuous",0.2405,14.16,"Medium",0.5677,0.7066,0.3552,"train"],["SYN_CONT_0011","continuous",0.0068,0.41,"Fair",0.9335,0.4016,0.7991,"train"],["SYN_CONT_0012","continuous",0.3387,19.4,"Medium",0.4399,0.6887,0.2356,"train"],["SYN_CONT_0013","continuous",0.2872,16.65,"Fair",0.575,0.4364,0.4338,"test"],["SYN_CONT_0014","continuous",0.0708,4.25,"Dark",0.7472,1.0832,0.4081,"train"],["SYN_CONT_0015","continuous",0.0607,3.64,"Dark",0.7444,1.0827,0.4205,"train"],["SYN_CONT_0016","continuous",0.0612,3.67,"Medium",0.8067,0.7171,0.5907,"test"],["SYN_CONT_0017","continuous",0.1013,6.08,"Fair",0.8097,0.4222,0.6907,"train"],["SYN_CONT_0018","continuous",0.175,10.5,"Fair",0.6941,0.3995,0.586,"train"],["SYN_CONT_0019","continuous",0.144,8.64,"Medium",0.6798,0.7022,0.47,"test"],["SYN_CONT_0020","continuous",0.097,5.82,"Dark",0.6847,1.0766,0.3839,"train"],["SYN_CONT_0021","continuous",0.2045,12.24,"Medium",0.6038,0.6838,0.3911,"train"],["SYN_CONT_0022","continuous",0.0465,2.79,"Dark",0.772,1.0745,0.4436,"train"],["SYN_CONT_0023","continuous",0.0973,5.84,"Fair",0.8115,0.4169,0.6893,"train"],["SYN_CONT_0024","continuous",0.1222,7.33,"Dark",0.6568,1.0886,0.3404,"train"],["SYN_CONT_0025","continuous",0.152,9.12,"Medium",0.6795,0.6959,0.4647,"train"],["SYN_CONT_0026","continuous",0.2694,15.7,"Fair",0.578,0.4236,0.4711,"train"],["SYN_CONT_0027","continuous",0.0665,3.99,"Medium",0.7869,0.6973,0.5956,"train"],["SYN_CONT_0028","continuous",0.1713,10.28,"Medium",0.6516,0.7004,0.4495,"test"],["SYN_CONT_0029","continuous",0.1975,11.85,"Dark",0.5566,1.1175,0.2371,"train"],["SYN_CONT_0030","continuous",0.0155,0.93,"Medium",0.8654,0.7347,0.6505,"train"],["SYN_CONT_0031","continuous",0.2028,12.15,"Dark",0.5604,1.1028,0.235,"train"],["SYN_CONT_0032","continuous",0.0568,3.41,"Fair",0.8792,0.4276,0.7325,"train"],["SYN_CONT_0033","continuous",0.0217,1.3,"Dark",0.8073,1.0776,0.4945,"train"],["SYN_CONT_0034","continuous",0.3309,18.98,"Fair",0.5091,0.4176,0.3831,"train"],["SYN_CONT_0035","continuous",0.3371,19.31,"Dark",0.3764,1.0811,0.0695,"train"],["SYN_CONT_0036","continuous",0.2782,16.17,"Medium",0.5113,0.6943,0.3094,"train"],["SYN_CONT_0037","continuous",0.1015,6.09,"Dark",0.7024,1.0776,0.3798,"test"],["SYN_CONT_0038","continuous",0.0325,1.95,"Dark",0.7824,1.0723,0.4746,"train"],["SYN_CONT_0039","continuous",0.2315,13.68,"Fair",0.6299,0.4254,0.5148,"train"],["SYN_CONT_0040","continuous",0.1467,8.8,"Medium",0.6915,0.7092,0.493,"train"],["SYN_CONT_0041","continuous",0.0407,2.44,"Dark",0.7719,1.0974,0.4511,"train"],["SYN_CONT_0042","continuous",0.165,9.9,"Medium",0.6641,0.7218,0.4541,"train"],["SYN_CONT_0043","continuous",0.0115,0.69,"Dark",0.8222,1.093,0.4903,"train"],["SYN_CONT_0044","continuous",0.3161,18.19,"Dark",0.4066,1.0818,0.0699,"train"],["SYN_CONT_0045","continuous",0.0863,5.18,"Medium",0.7866,0.6944,0.5567,"train"],["SYN_CONT_0046","continuous",0.2234,13.25,"Dark",0.5266,1.1015,0.2058,"train"],["SYN_CONT_0047","continuous",0.1038,6.23,"Medium",0.7526,0.6946,0.5343,"train"],["SYN_CONT_0048","continuous",0.1733,10.4,"Dark",0.5968,1.0895,0.2798,"train"],["SYN_CONT_0049","continuous",0.1822,10.93,"Fair",0.7002,0.4338,0.5736,"test"],["SYN_CONT_0050","continuous",0.0617,3.7,"Medium",0.8141,0.7171,0.5797,"train"],["SYN_CONT_0051","continuous",0.3386,19.39,"Dark",0.3885,1.0842,0.0538,"test"],["SYN_CONT_0052","continuous",0.2656,15.5,"Dark",0.4809,1.108,0.1477,"test"],["SYN_CONT_0053","continuous",0.3273,18.79,"Fair",0.5149,0.4385,0.3879,"train"],["SYN_CONT_0054","continuous",0.3106,17.9,"Medium",0.4969,0.7083,0.2512,"train"],["SYN_CONT_0055","continuous",0.1993,11.96,"Dark",0.5649,1.1036,0.2393,"train"],["SYN_CONT_0056","continuous",0.3208,18.44,"Fair",0.526,0.4206,0.3843,"train"],["SYN_CONT_0057","continuous",0.0295,1.77,"Dark",0.791,1.0774,0.4623,"train"],["SYN_CONT_0058","continuous",0.0653,3.92,"Medium",0.8042,0.7306,0.5885,"train"],["SYN_CONT_0059","continuous",0.015,0.9,"Dark",0.8034,1.0874,0.4977,"train"],["SYN_CONT_0060","continuous",0.1085,6.51,"Dark",0.6785,1.0712,0.3617,"train"],["SYN_CONT_0061","continuous",0.1295,7.77,"Dark",0.6483,1.0853,0.33,"train"],["SYN_CONT_0062","continuous",0.0905,5.43,"Dark",0.7115,1.0649,0.3825,"train"],["SYN_CONT_0063","continuous",0.2857,16.57,"Fair",0.5704,0.4206,0.4511,"train"],["SYN_CONT_0064","continuous",0.119,7.14,"Fair",0.779,0.416,0.6655,"train"],["SYN_CONT_0065","continuous",0.0937,5.62,"Medium",0.7485,0.6849,0.5369,"train"],["SYN_CONT_0066","continuous",0.1808,10.85,"Fair",0.7082,0.4206,0.5907,"test"],["SYN_CONT_0067","continuous",0.047,2.82,"Fair",0.8754,0.4312,0.7635,"train"],["SYN_CONT_0068","continuous",0.2758,16.04,"Medium",0.5356,0.7256,0.3177,"train"],["SYN_CONT_0069","continuous",0.0248,1.49,"Fair",0.9174,0.4309,0.788,"test"],["SYN_CONT_0070","continuous",0.3451,19.74,"Fair",0.4857,0.4121,0.364,"train"],["SYN_CONT_0071","continuous",0.2645,15.44,"Medium",0.5322,0.7012,0.3275,"train"],["SYN_CONT_0072","continuous",0.0662,3.97,"Medium",0.806,0.7144,0.5961,"test"],["SYN_CONT_0073","continuous",0.0018,0.11,"Medium",0.8793,0.7084,0.6696,"train"],["SYN_CONT_0074","continuous",0.2808,16.31,"Dark",0.4423,1.0938,0.1279,"train"],["SYN_CONT_0075","continuous",0.2401,14.14,"Dark",0.5201,1.1036,0.1706,"train"],["SYN_CONT_0076","continuous",0.2484,14.58,"Medium",0.5685,0.719,0.3463,"train"],["SYN_CONT_0077","continuous",0.2643,15.43,"Medium",0.532,0.6961,0.3191,"train"],["SYN_CONT_0078","continuous",0.0247,1.48,"Medium",0.8652,0.7338,0.6543,"train"],["SYN_CONT_0079","continuous",0.1195,7.17,"Dark",0.6644,1.0647,0.3467,"train"],["SYN_CONT_0080","continuous",0.0387,2.32,"Dark",0.7657,1.091,0.4524,"train"],["SYN_CONT_0081","continuous",0.2986,17.26,"Fair",0.5447,0.4075,0.4255,"train"],["SYN_CONT_0082","continuous",0.2088,12.47,"Fair",0.6567,0.4177,0.5092,"train"],["SYN_CONT_0083","continuous",0.1103,6.62,"Medium",0.7366,0.7188,0.5398,"train"],["SYN_CONT_0084","continuous",0.0212,1.27,"Dark",0.8007,1.0782,0.4828,"train"],["SYN_CONT_0085","continuous",0.1037,6.22,"Dark",0.682,1.0741,0.3748,"train"],["SYN_CONT_0086","continuous",0.1083,6.5,"Dark",0.6934,1.0715,0.3602,"test"],["SYN_CONT_0087","continuous",0.2486,14.59,"Medium",0.5464,0.6985,0.3396,"train"],["SYN_CONT_0088","continuous",0.2141,12.75,"Fair",0.6573,0.4382,0.5192,"train"],["SYN_CONT_0089","continuous",0.3076,17.74,"Medium",0.4918,0.7001,0.2688,"train"],["SYN_CONT_0090","continuous",0.1573,9.44,"Fair",0.724,0.3972,0.6107,"train"],["SYN_CONT_0091","continuous",0.0398,2.39,"Fair",0.8953,0.4252,0.7616,"test"],["SYN_CONT_0092","continuous",0.2424,14.26,"Medium",0.5653,0.6915,0.3448,"train"],["SYN_CONT_0093","continuous",0.2604,15.22,"Fair",0.6027,0.4134,0.4709,"train"],["SYN_CONT_0094","continuous",0.1872,11.23,"Fair",0.6786,0.4321,0.5609,"train"],["SYN_CONT_0095","continuous",0.2641,15.42,"Dark",0.4651,1.1074,0.1435,"train"],["SYN_CONT_0096","continuous",0.1647,9.88,"Fair",0.7136,0.4249,0.6024,"train"],["SYN_CONT_0097","continuous",0.1742,10.45,"Medium",0.6413,0.708,0.4406,"train"],["SYN_CONT_0098","continuous",0.1425,8.55,"Medium",0.6983,0.706,0.4786,"train"],["SYN_CONT_0099","continuous",0.0085,0.51,"Fair",0.9242,0.4226,0.7957,"train"],["SYN_CONT_0100","continuous",0.036,2.16,"Dark",0.7602,1.0916,0.4647,"train"],["SYN_CONT_0101","continuous",0.0105,0.63,"Dark",0.8004,1.072,0.4996,"train"],["SYN_CONT_0102","continuous",0.2137,12.73,"Fair",0.6713,0.4293,0.5203,"train"],["SYN_CONT_0103","continuous",0.1048,6.29,"Fair",0.8,0.4247,0.673,"train"],["SYN_CONT_0104","continuous",0.1695,10.17,"Medium",0.6494,0.7021,0.4361,"test"],["SYN_CONT_0105","continuous",0.3153,18.15,"Fair",0.5285,0.4386,0.4034,"train"],["SYN_CONT_0106","continuous",0.0832,4.99,"Dark",0.7162,1.0738,0.3827,"train"],["SYN_CONT_0107","continuous",0.1368,8.21,"Fair",0.765,0.4166,0.6313,"train"],["SYN_CONT_0108","continuous",0.2583,15.11,"Medium",0.5668,0.7091,0.3235,"test"],["SYN_CONT_0109","continuous",0.0763,4.58,"Medium",0.7807,0.721,0.5722,"train"],["SYN_CONT_0110","continuous",0.0257,1.54,"Medium",0.8436,0.7243,0.6352,"train"],["SYN_CONT_0111","continuous",0.0967,5.8,"Medium",0.7707,0.7121,0.5417,"train"],["SYN_CONT_0112","continuous",0.0537,3.22,"Medium",0.8261,0.7192,0.6071,"test"],["SYN_CONT_0113","continuous",0.3236,18.59,"Fair",0.521,0.4133,0.3855,"train"],["SYN_CONT_0114","continuous",0.278,16.16,"Fair",0.5825,0.4215,0.4436,"test"],["SYN_CONT_0115","continuous",0.2126,12.67,"Fair",0.6486,0.4334,0.544,"train"],["SYN_CONT_0116","continuous",0.3018,17.43,"Fair",0.5359,0.4235,0.4287,"train"],["SYN_CONT_0117","continuous",0.2763,16.07,"Medium",0.5182,0.7094,0.2989,"train"],["SYN_CONT_0118","continuous",0.0622,3.73,"Dark",0.7506,1.0833,0.4296,"train"],["SYN_CONT_0119","continuous",0.3097,17.85,"Fair",0.544,0.4486,0.4124,"test"],["SYN_CONT_0120","continuous",0.1798,10.79,"Dark",0.5882,1.0959,0.2546,"train"],["SYN_CONT_0121","continuous",0.2778,16.15,"Fair",0.5772,0.4219,0.4484,"train"],["SYN_CONT_0122","continuous",0.311,17.92,"Fair",0.5434,0.4125,0.4152,"train"],["SYN_CONT_0123","continuous",0.106,6.36,"Dark",0.6973,1.0706,0.3483,"train"],["SYN_CONT_0124","continuous",0.0367,2.2,"Medium",0.8348,0.7303,0.6243,"train"],["SYN_CONT_0125","continuous",0.076,4.56,"Fair",0.8326,0.4146,0.7215,"train"],["SYN_CONT_0126","continuous",0.1423,8.54,"Fair",0.7548,0.4161,0.622,"train"],["SYN_CONT_0127","continuous",0.2818,16.36,"Fair",0.5664,0.4153,0.4551,"train"],["SYN_CONT_0128","continuous",0.2977,17.21,"Dark",0.4336,1.1057,0.1203,"train"],["SYN_CONT_0129","continuous",0.0023,0.14,"Medium",0.8957,0.7062,0.6778,"train"],["SYN_CONT_0130","continuous",0.1702,10.21,"Dark",0.5987,1.082,0.2742,"test"],["SYN_CONT_0131","continuous",0.1392,8.35,"Dark",0.6319,1.0936,0.3131,"train"],["SYN_CONT_0132","continuous",0.074,4.44,"Medium",0.789,0.7132,0.5722,"train"],["SYN_CONT_0133","continuous",0.04,2.4,"Dark",0.7827,1.0833,0.4586,"train"],["SYN_CONT_0134","continuous",0.1125,6.75,"Medium",0.7231,0.7025,0.539,"train"],["SYN_CONT_0135","continuous",0.3286,18.86,"Fair",0.5028,0.4146,0.3885,"train"],["SYN_CONT_0136","continuous",0.1077,6.46,"Medium",0.7419,0.7043,0.5342,"train"],["SYN_CONT_0137","continuous",0.173,10.38,"Fair",0.7138,0.4357,0.5846,"train"],["SYN_CONT_0138","continuous",0.2386,14.06,"Dark",0.5079,1.1042,0.1958,"train"],["SYN_CONT_0139","continuous",0.1212,7.27,"Dark",0.6649,1.0666,0.352,"train"],["SYN_CONT_0140","continuous",0.3395,19.44,"Fair",0.4962,0.399,0.3777,"test"],["SYN_CONT_0141","continuous",0.3359,19.25,"Dark",0.3842,1.09,0.0639,"test"],["SYN_CONT_0142","continuous",0.084,5.04,"Medium",0.7749,0.7135,0.558,"test"],["SYN_CONT_0143","continuous",0.1657,9.94,"Fair",0.7228,0.4205,0.5977,"train"],["SYN_CONT_0144","continuous",0.1003,6.02,"Dark",0.6995,1.0607,0.3822,"test"],["SYN_CONT_0145","continuous",0.095,5.7,"Fair",0.8105,0.4201,0.6941,"train"],["SYN_CONT_0146","continuous",0.0123,0.74,"Medium",0.8884,0.7102,0.6572,"train"],["SYN_CONT_0147","continuous",0.2036,12.19,"Medium",0.6094,0.7067,0.403,"train"],["SYN_CONT_0148","continuous",0.1675,10.05,"Dark",0.5896,1.0797,0.2669,"test"],["SYN_CONT_0149","continuous",0.0172,1.03,"Medium",0.8746,0.7305,0.6521,"train"],["SYN_CONT_0150","continuous",0.0928,5.57,"Fair",0.8164,0.4136,0.7032,"train"],["SYN_CONT_0151","continuous",0.3157,18.17,"Medium",0.4624,0.7047,0.2669,"train"],["SYN_CONT_0152","continuous",0.0798,4.79,"Fair",0.8394,0.42,0.718,"test"],["SYN_CONT_0153","continuous",0.0483,2.9,"Fair",0.8566,0.4364,0.7441,"train"],["SYN_CONT_0154","continuous",0.1632,9.79,"Medium",0.6498,0.7114,0.4636,"test"],["SYN_CONT_0155","continuous",0.3446,19.71,"Dark",0.3767,1.0999,0.0636,"train"],["SYN_CONT_0156","continuous",0.0807,4.84,"Medium",0.7886,0.7241,0.5717,"train"],["SYN_CONT_0157","continuous",0.227,13.44,"Fair",0.6388,0.4122,0.5077,"test"],["SYN_CONT_0158","continuous",0.2606,15.23,"Fair",0.5893,0.4477,0.4669,"test"],["SYN_CONT_0159","continuous",0.0792,4.75,"Medium",0.7812,0.7138,0.568,"test"],["SYN_CONT_0160","continuous",0.248,14.56,"Dark",0.5117,1.0906,0.1707,"test"],["SYN_CONT_0161","continuous",0.1227,7.36,"Dark",0.658,1.0636,0.336,"test"],["SYN_CONT_0162","continuous",0.2122,12.65,"Fair",0.6564,0.4249,0.5224,"train"],["SYN_CONT_0163","continuous",0.2126,12.67,"Fair",0.645,0.4283,0.5155,"train"],["SYN_CONT_0164","continuous",0.1787,10.72,"Dark",0.5933,1.0944,0.2475,"test"],["SYN_CONT_0165","continuous",0.0302,1.81,"Medium",0.8463,0.7085,0.6365,"test"],["SYN_CONT_0166","continuous",0.2883,16.71,"Fair",0.572,0.4054,0.435,"train"],["SYN_CONT_0167","continuous",0.107,6.42,"Fair",0.7972,0.4181,0.6768,"test"],["SYN_CONT_0168","continuous",0.0622,3.73,"Dark",0.7412,1.0819,0.4153,"train"],["SYN_CONT_0169","continuous",0.0137,0.82,"Medium",0.8805,0.7129,0.6733,"train"],["SYN_CONT_0170","continuous",0.197,11.82,"Dark",0.5616,1.092,0.2203,"train"],["SYN_CONT_0171","continuous",0.2291,13.55,"Medium",0.5633,0.6922,0.3675,"train"],["SYN_CONT_0172","continuous",0.0055,0.33,"Medium",0.8874,0.6953,0.6771,"train"],["SYN_CONT_0173","continuous",0.1707,10.24,"Medium",0.6503,0.7085,0.455,"train"],["SYN_CONT_0174","continuous",0.0755,4.53,"Fair",0.8485,0.4171,0.7083,"train"],["SYN_CONT_0175","continuous",0.2169,12.9,"Dark",0.5197,1.0917,0.2056,"train"],["SYN_CONT_0176","continuous",0.0582,3.49,"Dark",0.7448,1.0854,0.4273,"test"],["SYN_CONT_0177","continuous",0.2341,13.82,"Medium",0.5697,0.7012,0.3605,"train"],["SYN_CONT_0178","continuous",0.1288,7.73,"Fair",0.7723,0.4049,0.6553,"test"],["SYN_CONT_0179","continuous",0.3262,18.73,"Fair",0.5131,0.4218,0.393,"train"],["SYN_CONT_0180","continuous",0.0458,2.75,"Dark",0.7717,1.0987,0.4454,"train"],["SYN_CONT_0181","continuous",0.1137,6.82,"Fair",0.7845,0.4163,0.6564,"train"],["SYN_CONT_0182","continuous",0.0378,2.27,"Fair",0.8929,0.4272,0.7621,"test"],["SYN_CONT_0183","continuous",0.3217,18.49,"Medium",0.4613,0.6831,0.2473,"train"],["SYN_CONT_0184","continuous",0.3041,17.55,"Fair",0.5423,0.4247,0.4064,"train"],["SYN_CONT_0185","continuous",0.086,5.16,"Medium",0.7807,0.6969,0.5667,"train"],["SYN_CONT_0186","continuous",0.2225,13.2,"Dark",0.5334,1.092,0.2146,"train"],["SYN_CONT_0187","continuous",0.2814,16.34,"Fair",0.5605,0.4338,0.4506,"train"],["SYN_CONT_0188","continuous",0.185,11.1,"Dark",0.5732,1.1094,0.2479,"train"],["SYN_CONT_0189","continuous",0.1765,10.59,"Dark",0.5925,1.0956,0.2612,"train"],["SYN_CONT_0190","continuous",0.0807,4.84,"Fair",0.8408,0.4257,0.695,"train"],["SYN_CONT_0191","continuous",0.031,1.86,"Fair",0.9115,0.4096,0.7815,"train"],["SYN_CONT_0192","continuous",0.3114,17.94,"Dark",0.4282,1.0817,0.0881,"train"],["SYN_CONT_0193","continuous",0.3127,18.01,"Fair",0.5219,0.4203,0.4016,"train"],["SYN_CONT_0194","continuous",0.2124,12.66,"Medium",0.6048,0.7223,0.397,"train"],["SYN_CONT_0195","continuous",0.113,6.78,"Medium",0.7287,0.6992,0.5093,"test"],["SYN_CONT_0196","continuous",0.1163,6.98,"Fair",0.7793,0.4229,0.6747,"train"],["SYN_CONT_0197","continuous",0.2472,14.52,"Dark",0.4892,1.0909,0.1698,"train"],["SYN_CONT_0198","continuous",0.3114,17.94,"Fair",0.5347,0.4145,0.409,"train"],["SYN_CONT_0199","continuous",0.3076,17.74,"Fair",0.5333,0.4227,0.4146,"train"],["SYN_CONT_0200","continuous",0.2675,15.6,"Dark",0.4739,1.0911,0.1443,"train"],["SYN_CONT_0201","continuous",0.2158,12.84,"Dark",0.5377,1.0952,0.2066,"train"],["SYN_CONT_0202","continuous",0.028,1.68,"Medium",0.8646,0.7212,0.6348,"train"],["SYN_CONT_0203","continuous",0.0538,3.23,"Dark",0.7643,1.0851,0.4416,"train"],["SYN_CONT_0204","continuous",0.3119,17.97,"Medium",0.4774,0.7015,0.2673,"test"],["SYN_CONT_0205","continuous",0.2024,12.13,"Dark",0.5424,1.0886,0.2155,"train"],["SYN_CONT_0206","continuous",0.003,0.18,"Fair",0.9392,0.4379,0.8297,"train"],["SYN_CONT_0207","continuous",0.0338,2.03,"Medium",0.8487,0.7218,0.6142,"train"],["SYN_CONT_0208","continuous",0.2238,13.27,"Medium",0.58,0.7005,0.3668,"train"],["SYN_CONT_0209","continuous",0.0017,0.1,"Medium",0.8873,0.7056,0.6597,"train"],["SYN_CONT_0210","continuous",0.0537,3.22,"Fair",0.877,0.4178,0.7444,"train"],["SYN_CONT_0211","continuous",0.1828,10.97,"Fair",0.7119,0.4174,0.5471,"train"],["SYN_CONT_0212","continuous",0.2345,13.84,"Fair",0.6265,0.4387,0.5161,"train"],["SYN_CONT_0213","continuous",0.2195,13.04,"Fair",0.6377,0.4337,0.5152,"train"],["SYN_CONT_0214","continuous",0.0748,4.49,"Fair",0.8414,0.4465,0.7042,"train"],["SYN_CONT_0215","continuous",0.242,14.24,"Medium",0.5637,0.7119,0.3582,"train"],["SYN_CONT_0216","continuous",0.079,4.74,"Fair",0.8373,0.4215,0.7079,"train"],["SYN_CONT_0217","continuous",0.1085,6.51,"Medium",0.7415,0.6974,0.5341,"train"],["SYN_CONT_0218","continuous",0.2549,14.93,"Fair",0.6002,0.4301,0.475,"train"],["SYN_CONT_0219","continuous",0.2186,12.99,"Dark",0.5439,1.0982,0.191,"train"],["SYN_CONT_0220","continuous",0.2934,16.98,"Medium",0.5077,0.6947,0.2812,"train"],["SYN_CONT_0221","continuous",0.2216,13.15,"Dark",0.5264,1.1123,0.1845,"train"],["SYN_CONT_0222","continuous",0.1895,11.37,"Medium",0.6535,0.7195,0.4175,"test"],["SYN_CONT_0223","continuous",0.0312,1.87,"Dark",0.7899,1.0891,0.4687,"test"],["SYN_CONT_0224","continuous",0.1225,7.35,"Fair",0.7826,0.4201,0.6538,"train"],["SYN_CONT_0225","continuous",0.0883,5.3,"Fair",0.8223,0.4132,0.6979,"train"],["SYN_CONT_0226","continuous",0.0813,4.88,"Fair",0.8425,0.4234,0.6846,"train"],["SYN_CONT_0227","continuous",0.3399,19.46,"Medium",0.4449,0.7026,0.2293,"train"],["SYN_CONT_0228","continuous",0.131,7.86,"Dark",0.6494,1.0905,0.3363,"train"],["SYN_CONT_0229","continuous",0.3095,17.84,"Fair",0.5286,0.4268,0.4002,"train"],["SYN_CONT_0230","continuous",0.2116,12.62,"Dark",0.5325,1.093,0.2206,"train"],["SYN_CONT_0231","continuous",0.2731,15.9,"Dark",0.4745,1.1003,0.1441,"train"],["SYN_CONT_0232","continuous",0.1675,10.05,"Fair",0.7203,0.4171,0.5926,"train"],["SYN_CONT_0233","continuous",0.1923,11.54,"Fair",0.6888,0.436,0.5634,"train"],["SYN_CONT_0234","continuous",0.1642,9.85,"Dark",0.6128,1.0928,0.2889,"train"],["SYN_CONT_0235","continuous",0.065,3.9,"Fair",0.8554,0.4152,0.7271,"train"],["SYN_CONT_0236","continuous",0.2459,14.45,"Fair",0.6085,0.4202,0.4852,"train"],["SYN_CONT_0237","continuous",0.0937,5.62,"Fair",0.8103,0.4095,0.6777,"train"],["SYN_CONT_0238","continuous",0.0082,0.49,"Medium",0.8813,0.7116,0.6595,"train"],["SYN_CONT_0239","continuous",0.2171,12.91,"Dark",0.542,1.1082,0.1942,"train"],["SYN_CONT_0240","continuous",0.059,3.54,"Dark",0.7455,1.0787,0.4181,"train"],["SYN_CONT_0241","continuous",0.3277,18.81,"Medium",0.4615,0.6995,0.2423,"train"],["SYN_CONT_0242","continuous",0.3328,19.08,"Dark",0.3765,1.0975,0.0552,"train"],["SYN_CONT_0243","continuous",0.3181,18.3,"Fair",0.5244,0.4249,0.4082,"train"],["SYN_CONT_0244","continuous",0.1233,7.4,"Dark",0.6526,1.0468,0.3414,"train"],["SYN_CONT_0245","continuous",0.0052,0.31,"Fair",0.9496,0.4334,0.8105,"train"],["SYN_CONT_0246","continuous",0.3232,18.57,"Medium",0.4565,0.7099,0.2421,"train"],["SYN_CONT_0247","continuous",0.1427,8.56,"Fair",0.7538,0.4236,0.6329,"train"],["SYN_CONT_0248","continuous",0.3374,19.33,"Dark",0.4087,1.0948,0.0553,"test"],["SYN_CONT_0249","continuous",0.3363,19.27,"Dark",0.3879,1.0732,0.0552,"test"],["SYN_CONT_0250","continuous",0.2949,17.06,"Dark",0.4364,1.0884,0.1128,"train"],["SYN_CONT_0251","continuous",0.0982,5.89,"Medium",0.747,0.7119,0.5433,"train"],["SYN_CONT_0252","continuous",0.1283,7.7,"Medium",0.7121,0.6996,0.5026,"test"],["SYN_CONT_0253","continuous",0.2941,17.02,"Dark",0.4473,1.0851,0.1073,"train"],["SYN_CONT_0254","continuous",0.1057,6.34,"Fair",0.7979,0.3977,0.6704,"test"],["SYN_CONT_0255","continuous",0.0565,3.39,"Medium",0.8081,0.7261,0.5988,"train"],["SYN_CONT_0256","continuous",0.1857,11.14,"Dark",0.5792,1.1042,0.2478,"train"],["SYN_CONT_0257","continuous",0.326,18.72,"Dark",0.404,1.0906,0.0756,"train"],["SYN_CONT_0258","continuous",0.236,13.92,"Medium",0.5645,0.6832,0.3558,"train"],["SYN_CONT_0259","continuous",0.19,11.4,"Medium",0.6391,0.7183,0.4227,"train"],["SYN_CONT_0260","continuous",0.0323,1.94,"Medium",0.8556,0.7174,0.6324,"test"],["SYN_CONT_0261","continuous",0.2056,12.3,"Fair",0.66,0.4265,0.541,"train"],["SYN_CONT_0262","continuous",0.3462,19.8,"Fair",0.4983,0.4189,0.359,"train"],["SYN_CONT_0263","continuous",0.0467,2.8,"Dark",0.7687,1.0953,0.4303,"train"],["SYN_CONT_0264","continuous",0.1728,10.37,"Medium",0.6328,0.7018,0.4293,"test"],["SYN_CONT_0265","continuous",0.3041,17.55,"Fair",0.5375,0.4216,0.411,"test"],["SYN_CONT_0266","continuous",0.2529,14.82,"Medium",0.5597,0.7097,0.3385,"train"],["SYN_CONT_0267","continuous",0.2364,13.94,"Dark",0.5176,1.0862,0.1917,"test"],["SYN_CONT_0268","continuous",0.2384,14.05,"Fair",0.6232,0.4341,0.487,"train"],["SYN_CONT_0269","continuous",0.1198,7.19,"Fair",0.7686,0.4221,0.6598,"train"],["SYN_CONT_0270","continuous",0.0978,5.87,"Fair",0.8037,0.4022,0.6967,"train"],["SYN_CONT_0271","continuous",0.2786,16.19,"Dark",0.4505,1.1112,0.1244,"test"],["SYN_CONT_0272","continuous",0.2788,16.2,"Medium",0.5209,0.7015,0.3092,"test"],["SYN_CONT_0273","continuous",0.3001,17.34,"Fair",0.5422,0.4217,0.4198,"test"],["SYN_CONT_0274","continuous",0.3174,18.26,"Dark",0.4037,1.0996,0.0799,"train"],["SYN_CONT_0275","continuous",0.1705,10.23,"Medium",0.6526,0.6971,0.4218,"train"],["SYN_CONT_0276","continuous",0.1672,10.03,"Dark",0.6015,1.1143,0.2822,"train"],["SYN_CONT_0277","continuous",0.2744,15.97,"Medium",0.521,0.7024,0.3099,"train"],["SYN_CONT_0278","continuous",0.2188,13.0,"Dark",0.539,1.0869,0.2139,"test"],["SYN_CONT_0279","continuous",0.2382,14.04,"Medium",0.572,0.7146,0.3576,"train"],["SYN_CONT_0280","continuous",0.2735,15.92,"Fair",0.58,0.4318,0.4571,"train"],["SYN_CONT_0281","continuous",0.3087,17.8,"Medium",0.4756,0.697,0.2684,"train"],["SYN_CONT_0282","continuous",0.1127,6.76,"Dark",0.69,1.0614,0.3438,"train"],["SYN_CONT_0283","continuous",0.1252,7.51,"Dark",0.6618,1.0781,0.3386,"train"],["SYN_CONT_0284","continuous",0.0313,1.88,"Medium",0.8491,0.714,0.6442,"train"],["SYN_CONT_0285","continuous",0.1928,11.57,"Fair",0.6689,0.4203,0.5524,"test"],["SYN_CONT_0286","continuous",0.012,0.72,"Fair",0.913,0.4206,0.8127,"train"],["SYN_CONT_0287","continuous",0.1552,9.31,"Medium",0.6756,0.7078,0.4537,"train"],["SYN_CONT_0288","continuous",0.1808,10.85,"Medium",0.6353,0.7043,0.4253,"train"],["SYN_CONT_0289","continuous",0.0955,5.73,"Dark",0.7115,1.0774,0.3708,"train"],["SYN_CONT_0290","continuous",0.197,11.82,"Fair",0.6781,0.4344,0.5564,"test"],["SYN_CONT_0291","continuous",0.0102,0.61,"Medium",0.8894,0.7019,0.6567,"train"],["SYN_CONT_0292","continuous",0.0125,0.75,"Fair",0.9154,0.4202,0.8025,"test"],["SYN_CONT_0293","continuous",0.2834,16.45,"Medium",0.5179,0.7037,0.2961,"train"],["SYN_CONT_0294","continuous",0.12,7.2,"Medium",0.7248,0.6936,0.5297,"test"],["SYN_CONT_0295","continuous",0.0423,2.54,"Fair",0.8733,0.4303,0.7738,"train"],["SYN_CONT_0296","continuous",0.174,10.44,"Medium",0.6497,0.7055,0.4345,"train"],["SYN_CONT_0297","continuous",0.2638,15.4,"Medium",0.5331,0.7195,0.3051,"train"],["SYN_CONT_0298","continuous",0.072,4.32,"Dark",0.7459,1.067,0.4071,"train"],["SYN_CONT_0299","continuous",0.2086,12.46,"Medium",0.5998,0.7153,0.3776,"test"],["SYN_CONT_0300","continuous",0.0285,1.71,"Medium",0.8548,0.7359,0.6255,"test"],["SYN_CONT_0301","continuous",0.0172,1.03,"Medium",0.8685,0.7068,0.6563,"train"],["SYN_CONT_0302","continuous",0.1772,10.63,"Dark",0.5894,1.0867,0.2652,"train"],["SYN_CONT_0303","continuous",0.1802,10.81,"Fair",0.7134,0.4241,0.5769,"train"],["SYN_CONT_0304","continuous",0.2141,12.75,"Dark",0.5301,1.0895,0.2145,"train"],["SYN_CONT_0305","continuous",0.2472,14.52,"Dark",0.511,1.1004,0.1675,"train"],["SYN_CONT_0306","continuous",0.341,19.52,"Fair",0.4953,0.4081,0.3739,"train"],["SYN_CONT_0307","continuous",0.1722,10.33,"Dark",0.6032,1.0871,0.2649,"test"],["SYN_CONT_0308","continuous",0.1077,6.46,"Fair",0.7997,0.4072,0.6736,"test"],["SYN_CONT_0309","continuous",0.2731,15.9,"Dark",0.4836,1.0927,0.1354,"train"],["SYN_CONT_0310","continuous",0.0903,5.42,"Fair",0.816,0.4213,0.6955,"train"],["SYN_CONT_0311","continuous",0.1463,8.78,"Medium",0.6823,0.7178,0.4875,"train"],["SYN_CONT_0312","continuous",0.0262,1.57,"Dark",0.7926,1.0666,0.4799,"train"],["SYN_CONT_0313","continuous",0.0085,0.51,"Dark",0.8166,1.0896,0.4818,"test"],["SYN_CONT_0314","continuous",0.3359,19.25,"Dark",0.3957,1.0788,0.0671,"train"],["SYN_CONT_0315","continuous",0.2885,16.72,"Dark",0.4478,1.0846,0.1162,"train"],["SYN_CONT_0316","continuous",0.236,13.92,"Medium",0.5746,0.7087,0.3615,"train"],["SYN_CONT_0317","continuous",0.1363,8.18,"Dark",0.661,1.0653,0.3339,"test"],["SYN_CONT_0318","continuous",0.0578,3.47,"Medium",0.8109,0.7079,0.5843,"train"],["SYN_CONT_0319","continuous",0.0522,3.13,"Medium",0.8165,0.7283,0.6012,"train"],["SYN_CONT_0320","continuous",0.0833,5.0,"Medium",0.7864,0.6922,0.5622,"test"],["SYN_CONT_0321","continuous",0.183,10.98,"Medium",0.6273,0.7119,0.4319,"train"],["SYN_CONT_0322","continuous",0.2429,14.29,"Fair",0.6148,0.4011,0.4916,"train"],["SYN_CONT_0323","continuous",0.2225,13.2,"Fair",0.6473,0.4325,0.5251,"train"],["SYN_CONT_0324","continuous",0.0933,5.6,"Dark",0.6956,1.0795,0.3919,"test"],["SYN_CONT_0325","continuous",0.3331,19.1,"Fair",0.4909,0.4243,0.3748,"train"],["SYN_CONT_0326","continuous",0.2517,14.76,"Fair",0.6065,0.43,0.4753,"train"],["SYN_CONT_0327","continuous",0.1848,11.09,"Dark",0.5734,1.0958,0.2414,"train"],["SYN_CONT_0328","continuous",0.2043,12.23,"Dark",0.5439,1.1065,0.2135,"train"],["SYN_CONT_0329","continuous",0.1398,8.39,"Dark",0.6458,1.0866,0.302,"train"],["SYN_CONT_0330","continuous",0.0825,4.95,"Fair",0.8264,0.4289,0.6989,"test"],["SYN_CONT_0331","continuous",0.1187,7.12,"Fair",0.7789,0.4184,0.6648,"train"],["SYN_CONT_0332","continuous",0.2592,15.16,"Dark",0.4821,1.0901,0.1667,"train"],["SYN_CONT_0333","continuous",0.0048,0.29,"Medium",0.8981,0.7208,0.6716,"train"],["SYN_CONT_0334","continuous",0.0387,2.32,"Dark",0.7734,1.0794,0.4577,"train"],["SYN_CONT_0335","continuous",0.0153,0.92,"Medium",0.8729,0.7271,0.6608,"train"],["SYN_CONT_0336","continuous",0.0135,0.81,"Medium",0.8601,0.7232,0.6503,"train"],["SYN_CONT_0337","continuous",0.2958,17.11,"Dark",0.4355,1.0961,0.1264,"train"],["SYN_CONT_0338","continuous",0.2388,14.07,"Dark",0.5345,1.1035,0.1789,"train"],["SYN_CONT_0339","continuous",0.158,9.48,"Dark",0.6198,1.0963,0.2868,"train"],["SYN_CONT_0340","continuous",0.0327,1.96,"Fair",0.9132,0.4288,0.7749,"test"],["SYN_CONT_0341","continuous",0.1638,9.83,"Medium",0.6689,0.7106,0.4583,"train"],["SYN_CONT_0342","continuous",0.1578,9.47,"Fair",0.7244,0.416,0.5941,"train"],["SYN_CONT_0343","continuous",0.0577,3.46,"Fair",0.8691,0.4347,0.7412,"train"],["SYN_CONT_0344","continuous",0.1447,8.68,"Dark",0.6472,1.0833,0.3141,"train"],["SYN_CONT_0345","continuous",0.1328,7.97,"Fair",0.7546,0.4127,0.6439,"train"],["SYN_CONT_0346","continuous",0.206,12.32,"Dark",0.5573,1.0967,0.2201,"train"],["SYN_CONT_0347","continuous",0.2131,12.7,"Medium",0.5855,0.7056,0.392,"train"],["SYN_CONT_0348","continuous",0.0152,0.91,"Dark",0.8174,1.088,0.4883,"train"],["SYN_CONT_0349","continuous",0.1248,7.49,"Fair",0.7743,0.4084,0.6553,"train"],["SYN_CONT_0350","continuous",0.2098,12.52,"Fair",0.6631,0.4343,0.5268,"train"],["SYN_CONT_0351","continuous",0.1677,10.06,"Dark",0.5851,1.1013,0.2714,"train"],["SYN_CONT_0352","continuous",0.2962,17.13,"Dark",0.4312,1.1005,0.1069,"train"],["SYN_CONT_0353","continuous",0.2219,13.17,"Fair",0.653,0.4347,0.5214,"train"],["SYN_CONT_0354","continuous",0.0543,3.26,"Medium",0.804,0.7304,0.6015,"test"],["SYN_CONT_0355","continuous",0.0235,1.41,"Medium",0.8551,0.7161,0.6295,"train"],["SYN_CONT_0356","continuous",0.2159,12.85,"Dark",0.5414,1.0886,0.1976,"train"],["SYN_CONT_0357","continuous",0.0088,0.53,"Medium",0.8665,0.7229,0.6601,"train"],["SYN_CONT_0358","continuous",0.1953,11.72,"Fair",0.6906,0.4237,0.536,"train"],["SYN_CONT_0359","continuous",0.3275,18.8,"Dark",0.3901,1.1039,0.0704,"test"],["SYN_CONT_0360","continuous",0.1918,11.51,"Fair",0.6787,0.43,0.5586,"test"],["SYN_CONT_0361","continuous",0.1293,7.76,"Fair",0.777,0.4304,0.6405,"test"],["SYN_CONT_0362","continuous",0.2163,12.87,"Medium",0.5831,0.7048,0.3831,"train"],["SYN_CONT_0363","continuous",0.1528,9.17,"Dark",0.6149,1.0763,0.2996,"train"],["SYN_CONT_0364","continuous",0.1818,10.91,"Dark",0.5825,1.0949,0.2485,"train"],["SYN_CONT_0365","continuous",0.3281,18.83,"Medium",0.4525,0.6922,0.251,"train"],["SYN_CONT_0366","continuous",0.1287,7.72,"Fair",0.7773,0.3973,0.6369,"train"],["SYN_CONT_0367","continuous",0.3354,19.22,"Fair",0.4904,0.4145,0.3754,"test"],["SYN_CONT_0368","continuous",0.3146,18.11,"Fair",0.5168,0.4131,0.3937,"test"],["SYN_CONT_0369","continuous",0.0653,3.92,"Fair",0.8568,0.4246,0.7222,"train"],["SYN_CONT_0370","continuous",0.0232,1.39,"Dark",0.803,1.0792,0.474,"train"],["SYN_CONT_0371","continuous",0.0337,2.02,"Dark",0.8003,1.1001,0.4505,"train"],["SYN_CONT_0372","continuous",0.006,0.36,"Medium",0.8892,0.7193,0.6601,"train"],["SYN_CONT_0373","continuous",0.0315,1.89,"Medium",0.8535,0.7317,0.623,"test"],["SYN_CONT_0374","continuous",0.2311,13.66,"Dark",0.5119,1.1081,0.192,"train"],["SYN_CONT_0375","continuous",0.0237,1.42,"Dark",0.8053,1.0881,0.4786,"train"],["SYN_CONT_0376","continuous",0.1063,6.38,"Fair",0.7888,0.4217,0.6854,"train"],["SYN_CONT_0377","continuous",0.2919,16.9,"Fair",0.555,0.4234,0.4174,"train"],["SYN_CONT_0378","continuous",0.0078,0.47,"Medium",0.8841,0.7173,0.6661,"test"],["SYN_CONT_0379","continuous",0.2804,16.29,"Dark",0.4667,1.0913,0.1338,"train"],["SYN_CONT_0380","continuous",0.094,5.64,"Medium",0.7512,0.7022,0.5473,"train"],["SYN_CONT_0381","continuous",0.0393,2.36,"Dark",0.7807,1.0842,0.4515,"train"],["SYN_CONT_0382","continuous",0.2362,13.93,"Fair",0.6333,0.4232,0.4855,"train"],["SYN_CONT_0383","continuous",0.2109,12.58,"Medium",0.6144,0.7231,0.3773,"train"],["SYN_CONT_0384","continuous",0.3041,17.55,"Medium",0.4898,0.698,0.2755,"train"],["SYN_CONT_0385","continuous",0.2506,14.7,"Dark",0.4972,1.0943,0.1596,"test"],["SYN_CONT_0386","continuous",0.2763,16.07,"Fair",0.5708,0.4158,0.4422,"train"],["SYN_CONT_0387","continuous",0.094,5.64,"Medium",0.7589,0.6952,0.5541,"train"],["SYN_CONT_0388","continuous",0.0592,3.55,"Fair",0.8754,0.4205,0.7375,"train"],["SYN_CONT_0389","continuous",0.2564,15.01,"Medium",0.5476,0.711,0.3324,"train"],["SYN_CONT_0390","continuous",0.2776,16.14,"Fair",0.5807,0.4296,0.4374,"train"],["SYN_CONT_0391","continuous",0.3464,19.81,"Dark",0.3824,1.0991,0.0423,"train"],["SYN_CONT_0392","continuous",0.1375,8.25,"Medium",0.6999,0.7106,0.4868,"train"],["SYN_CONT_0393","continuous",0.124,7.44,"Medium",0.7267,0.726,0.5011,"train"],["SYN_CONT_0394","continuous",0.2662,15.53,"Fair",0.578,0.4286,0.4671,"train"],["SYN_CONT_0395","continuous",0.1137,6.82,"Fair",0.7876,0.4273,0.6549,"train"],["SYN_CONT_0396","continuous",0.3241,18.62,"Medium",0.4648,0.6957,0.2625,"train"],["SYN_CONT_0397","continuous",0.2969,17.17,"Dark",0.4531,1.0859,0.1047,"train"],["SYN_CONT_0398","continuous",0.143,8.58,"Fair",0.7564,0.4147,0.6236,"train"],["SYN_CONT_0399","continuous",0.2566,15.02,"Fair",0.6012,0.407,0.4731,"train"],["SYN_CONT_0400","continuous",0.2579,15.09,"Fair",0.5939,0.4212,0.4831,"train"],["SYN_CONT_0401","continuous",0.0343,2.06,"Medium",0.8329,0.725,0.6256,"train"],["SYN_CONT_0402","continuous",0.3134,18.05,"Medium",0.4703,0.7103,0.2646,"train"],["SYN_CONT_0403","continuous",0.1685,10.11,"Medium",0.6617,0.7165,0.4424,"train"],["SYN_CONT_0404","continuous",0.2849,16.53,"Medium",0.5032,0.6935,0.2902,"train"],["SYN_CONT_0405","continuous",0.1067,6.4,"Dark",0.7095,1.0844,0.3535,"train"],["SYN_CONT_0406","continuous",0.3108,17.91,"Dark",0.4093,1.0974,0.0964,"test"],["SYN_CONT_0407","continuous",0.1297,7.78,"Medium",0.7147,0.7004,0.4985,"train"],["SYN_CONT_0408","continuous",0.0037,0.22,"Dark",0.8315,1.0816,0.4869,"train"],["SYN_CONT_0409","continuous",0.3146,18.11,"Fair",0.5266,0.4138,0.4031,"train"],["SYN_CONT_0410","continuous",0.0305,1.83,"Fair",0.9256,0.4298,0.7714,"test"],["SYN_CONT_0411","continuous",0.1065,6.39,"Fair",0.8065,0.4161,0.6791,"test"],["SYN_CONT_0412","continuous",0.3312,19.0,"Medium",0.4552,0.7218,0.231,"test"],["SYN_CONT_0413","continuous",0.3314,19.01,"Fair",0.5111,0.412,0.3853,"test"],["SYN_CONT_0414","continuous",0.1912,11.47,"Dark",0.5628,1.0932,0.2385,"train"],["SYN_CONT_0415","continuous",0.212,12.64,"Medium",0.6068,0.7184,0.3763,"train"],["SYN_CONT_0416","continuous",0.1495,8.97,"Dark",0.6276,1.0778,0.2917,"train"],["SYN_CONT_0417","continuous",0.0977,5.86,"Fair",0.8094,0.4078,0.7073,"train"],["SYN_CONT_0418","continuous",0.1095,6.57,"Fair",0.7985,0.3981,0.667,"train"],["SYN_CONT_0419","continuous",0.2272,13.45,"Fair",0.6461,0.4491,0.4968,"train"],["SYN_CONT_0420","continuous",0.2572,15.05,"Medium",0.5277,0.7249,0.334,"train"],["SYN_CONT_0421","continuous",0.2718,15.83,"Dark",0.4615,1.1006,0.1188,"train"],["SYN_CONT_0422","continuous",0.2711,15.79,"Medium",0.5254,0.7085,0.3212,"train"],["SYN_CONT_0423","continuous",0.0303,1.82,"Medium",0.8404,0.7169,0.6263,"train"],["SYN_CONT_0424","continuous",0.1648,9.89,"Fair",0.7219,0.414,0.5897,"train"],["SYN_CONT_0425","continuous",0.0192,1.15,"Medium",0.8562,0.7203,0.6569,"train"],["SYN_CONT_0426","continuous",0.1832,10.99,"Medium",0.6352,0.7087,0.413,"train"],["SYN_CONT_0427","continuous",0.1472,8.83,"Fair",0.7415,0.4189,0.639,"train"],["SYN_CONT_0428","continuous",0.3078,17.75,"Medium",0.4707,0.7175,0.2767,"train"],["SYN_CONT_0429","continuous",0.117,7.02,"Fair",0.7871,0.431,0.6638,"test"],["SYN_CONT_0430","continuous",0.039,2.34,"Fair",0.8936,0.4273,0.772,"test"],["SYN_CONT_0431","continuous",0.0477,2.86,"Fair",0.8879,0.4233,0.7397,"train"],["SYN_CONT_0432","continuous",0.2606,15.23,"Fair",0.5945,0.418,0.4678,"test"],["SYN_CONT_0433","continuous",0.2068,12.36,"Medium",0.6155,0.705,0.3924,"train"],["SYN_CONT_0434","continuous",0.0337,2.02,"Fair",0.898,0.4352,0.7516,"train"],["SYN_CONT_0435","continuous",0.028,1.68,"Fair",0.9002,0.4277,0.787,"test"],["SYN_CONT_0436","continuous",0.2379,14.02,"Medium",0.5628,0.6887,0.3595,"train"],["SYN_CONT_0437","continuous",0.0243,1.46,"Medium",0.8519,0.703,0.6375,"train"],["SYN_CONT_0438","continuous",0.2832,16.44,"Dark",0.4527,1.0884,0.1082,"train"],["SYN_CONT_0439","continuous",0.2398,14.12,"Medium",0.5716,0.7201,0.3575,"train"],["SYN_CONT_0440","continuous",0.0272,1.63,"Medium",0.8439,0.7134,0.6383,"test"],["SYN_CONT_0441","continuous",0.0283,1.7,"Dark",0.7991,1.0924,0.4628,"train"],["SYN_CONT_0442","continuous",0.3449,19.73,"Medium",0.434,0.7049,0.2349,"test"],["SYN_CONT_0443","continuous",0.1248,7.49,"Medium",0.7226,0.7104,0.5069,"train"],["SYN_CONT_0444","continuous",0.1235,7.41,"Medium",0.7301,0.7064,0.5012,"train"],["SYN_CONT_0445","continuous",0.2799,16.26,"Medium",0.5256,0.7117,0.2995,"train"],["SYN_CONT_0446","continuous",0.3301,18.94,"Dark",0.3919,1.0943,0.0721,"train"],["SYN_CONT_0447","continuous",0.3447,19.72,"Medium",0.4351,0.7035,0.237,"train"],["SYN_CONT_0448","continuous",0.2576,15.07,"Medium",0.5508,0.7081,0.3379,"train"],["SYN_CONT_0449","continuous",0.1255,7.53,"Dark",0.6518,1.0816,0.3512,"train"],["SYN_CONT_0450","continuous",0.0278,1.67,"Fair",0.9035,0.4171,0.7724,"train"],["SYN_CONT_0451","continuous",0.2664,15.54,"Dark",0.4665,1.0877,0.1436,"train"],["SYN_CONT_0452","continuous",0.1862,11.17,"Fair",0.6796,0.4274,0.5699,"train"],["SYN_CONT_0453","continuous",0.1413,8.48,"Dark",0.6311,1.0976,0.3177,"train"],["SYN_CONT_0454","continuous",0.3149,18.13,"Dark",0.423,1.0858,0.0938,"train"],["SYN_CONT_0455","continuous",0.037,2.22,"Medium",0.8305,0.7263,0.6254,"train"],["SYN_CONT_0456","continuous",0.1642,9.85,"Fair",0.7252,0.4111,0.5867,"train"],["SYN_CONT_0457","continuous",0.0038,0.23,"Medium",0.8904,0.7013,0.6761,"train"],["SYN_CONT_0458","continuous",0.1562,9.37,"Fair",0.7207,0.4297,0.5954,"train"],["SYN_CONT_0459","continuous",0.0188,1.13,"Dark",0.8121,1.09,0.4769,"train"],["SYN_CONT_0460","continuous",0.0397,2.38,"Dark",0.7831,1.0905,0.4478,"train"],["SYN_CONT_0461","continuous",0.0392,2.35,"Fair",0.8822,0.4082,0.7647,"train"],["SYN_CONT_0462","continuous",0.2184,12.98,"Medium",0.5786,0.7097,0.3764,"test"],["SYN_CONT_0463","continuous",0.2547,14.92,"Medium",0.5512,0.7033,0.3312,"train"],["SYN_CONT_0464","continuous",0.1945,11.67,"Medium",0.6274,0.7128,0.4112,"train"],["SYN_CONT_0465","continuous",0.3358,19.24,"Medium",0.4485,0.6856,0.2405,"train"],["SYN_CONT_0466","continuous",0.125,7.5,"Dark",0.6656,1.0673,0.3355,"train"],["SYN_CONT_0467","continuous",0.0952,5.71,"Dark",0.7014,1.0706,0.3828,"test"],["SYN_CONT_0468","continuous",0.3007,17.37,"Dark",0.4439,1.1041,0.094,"train"],["SYN_CONT_0469","continuous",0.0745,4.47,"Dark",0.7352,1.0935,0.4092,"test"],["SYN_CONT_0470","continuous",0.3361,19.26,"Dark",0.397,1.111,0.0692,"train"],["SYN_CONT_0471","continuous",0.004,0.24,"Medium",0.8874,0.7213,0.6733,"train"],["SYN_CONT_0472","continuous",0.3387,19.4,"Medium",0.4412,0.6972,0.2433,"train"],["SYN_CONT_0473","continuous",0.0143,0.86,"Medium",0.8644,0.7282,0.6611,"train"],["SYN_CONT_0474","continuous",0.3091,17.82,"Medium",0.4668,0.7064,0.2503,"train"],["SYN_CONT_0475","continuous",0.1758,10.55,"Dark",0.5961,1.1016,0.2585,"train"],["SYN_CONT_0476","continuous",0.3474,19.86,"Dark",0.3753,1.1097,0.0432,"train"],["SYN_CONT_0477","continuous",0.0247,1.48,"Dark",0.791,1.0997,0.4897,"train"],["SYN_CONT_0478","continuous",0.1847,11.08,"Fair",0.6929,0.437,0.5755,"test"],["SYN_CONT_0479","continuous",0.3386,19.39,"Medium",0.4353,0.6959,0.2409,"test"],["SYN_CONT_0480","continuous",0.1743,10.46,"Medium",0.6626,0.7131,0.4299,"train"],["SYN_CONT_0481","continuous",0.2111,12.59,"Dark",0.5601,1.094,0.2117,"train"],["SYN_CONT_0482","continuous",0.2358,13.91,"Medium",0.5721,0.7232,0.3639,"train"],["SYN_CONT_0483","continuous",0.1515,9.09,"Medium",0.6838,0.7098,0.4692,"test"],["SYN_CONT_0484","continuous",0.2103,12.55,"Dark",0.5496,1.074,0.213,"train"],["SYN_CONT_0485","continuous",0.1948,11.69,"Fair",0.681,0.4175,0.5534,"train"],["SYN_CONT_0486","continuous",0.3129,18.02,"Fair",0.5289,0.44,0.4164,"train"],["SYN_CONT_0487","continuous",0.0152,0.91,"Fair",0.9183,0.4215,0.7945,"train"],["SYN_CONT_0488","continuous",0.0937,5.62,"Dark",0.7001,1.0745,0.3759,"train"],["SYN_CONT_0489","continuous",0.3314,19.01,"Medium",0.4411,0.7075,0.2448,"train"],["SYN_CONT_0490","continuous",0.3089,17.81,"Dark",0.4158,1.1017,0.0893,"train"],["SYN_CONT_0491","continuous",0.1518,9.11,"Dark",0.626,1.0938,0.2981,"test"],["SYN_CONT_0492","continuous",0.2075,12.4,"Medium",0.6083,0.7043,0.3902,"train"],["SYN_CONT_0493","continuous",0.0925,5.55,"Fair",0.8166,0.4055,0.6929,"train"],["SYN_CONT_0494","continuous",0.0627,3.76,"Fair",0.8464,0.42,0.729,"train"],["SYN_CONT_0495","continuous",0.1545,9.27,"Dark",0.6183,1.0839,0.2939,"test"],["SYN_CONT_0496","continuous",0.1178,7.07,"Fair",0.7876,0.4223,0.6545,"train"],["SYN_CONT_0497","continuous",0.1945,11.67,"Dark",0.5559,1.0879,0.2321,"train"],["SYN_CONT_0498","continuous",0.0258,1.55,"Dark",0.795,1.0775,0.4619,"train"],["SYN_CONT_0499","continuous",0.3404,19.49,"Medium",0.4353,0.7025,0.2335,"train"],["SYN_CONT_0500","continuous",0.3447,19.72,"Medium",0.4291,0.6962,0.216,"train"],["SYN_CONT_0501","continuous",0.2368,13.96,"Medium",0.5679,0.6991,0.3605,"train"],["SYN_CONT_0502","continuous",0.1787,10.72,"Dark",0.5729,1.09,0.2616,"train"],["SYN_CONT_0503","continuous",0.1032,6.19,"Medium",0.7481,0.7272,0.5394,"train"],["SYN_CONT_0504","continuous",0.2802,16.28,"Fair",0.5634,0.4237,0.4298,"train"],["SYN_CONT_0505","continuous",0.2317,13.69,"Fair",0.6316,0.4196,0.5112,"train"],["SYN_CONT_0506","continuous",0.0542,3.25,"Dark",0.7539,1.0872,0.4267,"train"],["SYN_CONT_0507","continuous",0.3166,18.22,"Dark",0.4265,1.089,0.0996,"test"],["SYN_CONT_0508","continuous",0.2834,16.45,"Medium",0.5165,0.7093,0.3016,"train"],["SYN_CONT_0509","continuous",0.3312,19.0,"Dark",0.3975,1.072,0.0648,"train"],["SYN_CONT_0510","continuous",0.2471,14.51,"Dark",0.5061,1.0964,0.159,"train"],["SYN_CONT_0511","continuous",0.2051,12.27,"Fair",0.6652,0.4467,0.5467,"test"],["SYN_CONT_0512","continuous",0.1393,8.36,"Fair",0.754,0.4274,0.6262,"train"],["SYN_CONT_0513","continuous",0.3247,18.65,"Medium",0.4449,0.6924,0.2606,"test"],["SYN_CONT_0514","continuous",0.2997,17.32,"Dark",0.4315,1.0909,0.1032,"test"],["SYN_CONT_0515","continuous",0.015,0.9,"Dark",0.8282,1.0993,0.5059,"train"],["SYN_CONT_0516","continuous",0.0088,0.53,"Fair",0.9291,0.4247,0.7917,"train"],["SYN_CONT_0517","continuous",0.1255,7.53,"Dark",0.6719,1.066,0.3385,"train"],["SYN_CONT_0518","continuous",0.2789,16.21,"Fair",0.5643,0.4188,0.4389,"test"],["SYN_CONT_0519","continuous",0.3453,19.75,"Medium",0.428,0.6949,0.2184,"train"],["SYN_CONT_0520","continuous",0.0502,3.01,"Fair",0.8824,0.4189,0.7486,"test"],["SYN_CONT_0521","continuous",0.198,11.88,"Dark",0.5705,1.0943,0.2252,"train"],["SYN_CONT_0522","continuous",0.127,7.62,"Medium",0.7122,0.7145,0.5048,"train"],["SYN_CONT_0523","continuous",0.3387,19.4,"Fair",0.4939,0.4256,0.3631,"train"],["SYN_CONT_0524","continuous",0.2908,16.84,"Fair",0.5637,0.428,0.4286,"test"],["SYN_CONT_0525","continuous",0.2894,16.77,"Medium",0.4958,0.6952,0.2956,"train"],["SYN_CONT_0526","continuous",0.1562,9.37,"Medium",0.6839,0.6992,0.466,"test"],["SYN_CONT_0527","continuous",0.1383,8.3,"Fair",0.7392,0.4118,0.6303,"train"],["SYN_CONT_0528","continuous",0.0912,5.47,"Dark",0.6999,1.0642,0.3798,"train"],["SYN_CONT_0529","continuous",0.0188,1.13,"Fair",0.9195,0.4219,0.7721,"train"],["SYN_CONT_0530","continuous",0.2992,17.29,"Medium",0.4734,0.6973,0.283,"train"],["SYN_CONT_0531","continuous",0.2799,16.26,"Fair",0.5499,0.4197,0.4403,"train"],["SYN_CONT_0532","continuous",0.3498,19.99,"Medium",0.4383,0.6962,0.2203,"train"],["SYN_CONT_0533","continuous",0.3487,19.93,"Medium",0.4298,0.6788,0.2248,"train"],["SYN_CONT_0534","continuous",0.1852,11.11,"Dark",0.58,1.1006,0.2811,"test"],["SYN_CONT_0535","continuous",0.2634,15.38,"Medium",0.5183,0.723,0.321,"train"],["SYN_CONT_0536","continuous",0.3294,18.9,"Medium",0.455,0.7009,0.2389,"train"],["SYN_CONT_0537","continuous",0.2936,16.99,"Dark",0.4368,1.0971,0.1011,"train"],["SYN_CONT_0538","continuous",0.0825,4.95,"Medium",0.7815,0.7028,0.5544,"train"],["SYN_CONT_0539","continuous",0.1502,9.01,"Dark",0.6227,1.0976,0.2965,"train"],["SYN_CONT_0540","continuous",0.043,2.58,"Dark",0.7767,1.0813,0.4533,"train"],["SYN_CONT_0541","continuous",0.3328,19.08,"Medium",0.454,0.7196,0.2368,"train"],["SYN_CONT_0542","continuous",0.2022,12.12,"Medium",0.6165,0.7108,0.4086,"train"],["SYN_CONT_0543","continuous",0.0762,4.57,"Fair",0.8347,0.427,0.713,"test"],["SYN_CONT_0544","continuous",0.2268,13.43,"Dark",0.5241,1.0991,0.1971,"train"],["SYN_CONT_0545","continuous",0.2068,12.36,"Fair",0.6626,0.4317,0.5473,"train"],["SYN_CONT_0546","continuous",0.1193,7.16,"Medium",0.7324,0.7106,0.5103,"train"],["SYN_CONT_0547","continuous",0.0378,2.27,"Fair",0.8849,0.4371,0.7708,"train"],["SYN_CONT_0548","continuous",0.2268,13.43,"Dark",0.5364,1.0922,0.1933,"train"],["SYN_CONT_0549","continuous",0.1735,10.41,"Fair",0.6949,0.4208,0.5886,"train"],["SYN_CONT_0550","continuous",0.2647,15.45,"Dark",0.4736,1.1021,0.1471,"train"],["SYN_CONT_0551","continuous",0.1733,10.4,"Medium",0.6531,0.6959,0.439,"train"],["SYN_CONT_0552","continuous",0.2945,17.04,"Medium",0.4723,0.7018,0.272,"train"],["SYN_CONT_0553","continuous",0.184,11.04,"Dark",0.5896,1.103,0.2551,"train"],["SYN_CONT_0554","continuous",0.187,11.22,"Medium",0.644,0.6992,0.4332,"train"],["SYN_CONT_0555","continuous",0.3037,17.53,"Medium",0.4922,0.7007,0.2829,"train"],["SYN_CONT_0556","continuous",0.1345,8.07,"Medium",0.6949,0.6952,0.4878,"train"],["SYN_CONT_0557","continuous",0.0447,2.68,"Medium",0.8242,0.7084,0.6226,"test"],["SYN_CONT_0558","continuous",0.0097,0.58,"Dark",0.8184,1.0855,0.4913,"train"],["SYN_CONT_0559","continuous",0.2581,15.1,"Fair",0.5846,0.4288,0.456,"train"],["SYN_CONT_0560","continuous",0.2077,12.41,"Fair",0.6618,0.4158,0.5494,"train"],["SYN_CONT_0561","continuous",0.239,14.08,"Medium",0.5727,0.7085,0.3633,"train"],["SYN_CONT_0562","continuous",0.071,4.26,"Fair",0.8407,0.427,0.7226,"test"],["SYN_CONT_0563","continuous",0.0455,2.73,"Fair",0.8841,0.4418,0.7591,"train"],["SYN_CONT_0564","continuous",0.0048,0.29,"Medium",0.8865,0.6944,0.6633,"train"],["SYN_CONT_0565","continuous",0.1168,7.01,"Medium",0.727,0.7026,0.5084,"train"],["SYN_CONT_0566","continuous",0.1967,11.8,"Fair",0.6958,0.4445,0.5526,"test"],["SYN_CONT_0567","continuous",0.1307,7.84,"Dark",0.6536,1.0771,0.3216,"train"],["SYN_CONT_0568","continuous",0.1458,8.75,"Medium",0.6888,0.7072,0.4669,"train"],["SYN_CONT_0569","continuous",0.314,18.08,"Dark",0.4186,1.0908,0.0729,"train"],["SYN_CONT_0570","continuous",0.1162,6.97,"Fair",0.7791,0.4091,0.6771,"train"],["SYN_CONT_0571","continuous",0.1713,10.28,"Medium",0.6577,0.6938,0.445,"test"],["SYN_CONT_0572","continuous",0.2688,15.67,"Dark",0.4598,1.1062,0.1398,"train"],["SYN_CONT_0573","continuous",0.1322,7.93,"Medium",0.7062,0.7165,0.4857,"train"],["SYN_CONT_0574","continuous",0.2082,12.44,"Fair",0.6505,0.4236,0.5411,"test"],["SYN_CONT_0575","continuous",0.2984,17.25,"Dark",0.4231,1.0651,0.1036,"train"],["SYN_CONT_0576","continuous",0.3311,18.99,"Fair",0.5121,0.4333,0.3777,"test"],["SYN_CONT_0577","continuous",0.049,2.94,"Fair",0.874,0.4413,0.7334,"train"],["SYN_CONT_0578","continuous",0.3224,18.53,"Medium",0.4583,0.7037,0.2544,"train"],["SYN_CONT_0579","continuous",0.164,9.84,"Dark",0.6032,1.0895,0.2607,"test"],["SYN_CONT_0580","continuous",0.086,5.16,"Fair",0.8218,0.4201,0.6945,"train"],["SYN_CONT_0581","continuous",0.153,9.18,"Fair",0.7364,0.4251,0.607,"train"],["SYN_CONT_0582","continuous",0.3425,19.6,"Dark",0.3817,1.0809,0.0515,"test"],["SYN_CONT_0583","continuous",0.1642,9.85,"Fair",0.7256,0.4244,0.5892,"train"],["SYN_CONT_0584","continuous",0.1097,6.58,"Fair",0.7966,0.4191,0.6549,"test"],["SYN_CONT_0585","continuous",0.2126,12.67,"Dark",0.5516,1.0958,0.216,"test"],["SYN_CONT_0586","continuous",0.08,4.8,"Dark",0.7322,1.0643,0.3935,"test"],["SYN_CONT_0587","continuous",0.0253,1.52,"Dark",0.7962,1.0772,0.4869,"test"],["SYN_CONT_0588","continuous",0.043,2.58,"Dark",0.7669,1.083,0.4489,"train"],["SYN_CONT_0589","continuous",0.0427,2.56,"Medium",0.8216,0.7146,0.6182,"train"],["SYN_CONT_0590","continuous",0.0507,3.04,"Dark",0.7604,1.0888,0.4319,"train"],["SYN_CONT_0591","continuous",0.0463,2.78,"Medium",0.814,0.7225,0.6244,"test"],["SYN_CONT_0592","continuous",0.2154,12.82,"Medium",0.595,0.7112,0.3877,"test"],["SYN_CONT_0593","continuous",0.0607,3.64,"Medium",0.7959,0.7328,0.593,"train"],["SYN_CONT_0594","continuous",0.1152,6.91,"Fair",0.8004,0.4057,0.678,"train"],["SYN_CONT_0595","continuous",0.3114,17.94,"Medium",0.4814,0.7081,0.2663,"train"],["SYN_CONT_0596","continuous",0.158,9.48,"Medium",0.6696,0.7178,0.4609,"test"],["SYN_CONT_0597","continuous",0.2253,13.35,"Fair",0.6245,0.4171,0.5103,"train"],["SYN_CONT_0598","continuous",0.0575,3.45,"Fair",0.8683,0.4264,0.7475,"train"],["SYN_CONT_0599","continuous",0.0642,3.85,"Fair",0.8411,0.4258,0.7149,"train"],["SYN_CONT_0600","continuous",0.0137,0.82,"Dark",0.8209,1.0818,0.4934,"train"],["SYN_CONT_0601","continuous",0.0563,3.38,"Fair",0.8605,0.4403,0.7475,"train"],["SYN_CONT_0602","continuous",0.0928,5.57,"Fair",0.8224,0.4116,0.6985,"train"],["SYN_CONT_0603","continuous",0.059,3.54,"Medium",0.8027,0.725,0.6067,"train"],["SYN_CONT_0604","continuous",0.0295,1.77,"Fair",0.9116,0.4186,0.7782,"train"],["SYN_CONT_0605","continuous",0.0402,2.41,"Dark",0.7674,1.0938,0.455,"train"],["SYN_CONT_0606","continuous",0.1537,9.22,"Fair",0.7201,0.4091,0.6065,"train"],["SYN_CONT_0607","continuous",0.0688,4.13,"Dark",0.7356,1.0704,0.4164,"train"],["SYN_CONT_0608","continuous",0.1215,7.29,"Fair",0.7808,0.4124,0.6484,"train"],["SYN_CONT_0609","continuous",0.1678,10.07,"Fair",0.7241,0.4401,0.5848,"train"],["SYN_CONT_0610","continuous",0.2339,13.81,"Fair",0.6246,0.4326,0.4983,"train"],["SYN_CONT_0611","continuous",0.0132,0.79,"Fair",0.9235,0.43,0.7826,"train"],["SYN_CONT_0612","continuous",0.2748,15.99,"Dark",0.4753,1.0957,0.1329,"train"],["SYN_CONT_0613","continuous",0.2105,12.56,"Dark",0.5442,1.0989,0.2013,"train"],["SYN_CONT_0614","continuous",0.0273,1.64,"Medium",0.8647,0.7159,0.6416,"train"],["SYN_CONT_0615","continuous",0.3026,17.47,"Dark",0.4378,1.083,0.106,"train"],["SYN_CONT_0616","continuous",0.3204,18.42,"Fair",0.519,0.4304,0.3775,"train"],["SYN_CONT_0617","continuous",0.0203,1.22,"Medium",0.8617,0.708,0.6518,"train"],["SYN_CONT_0618","continuous",0.0923,5.54,"Medium",0.7655,0.696,0.5451,"train"],["SYN_CONT_0619","continuous",0.2772,16.12,"Medium",0.5168,0.6959,0.313,"train"],["SYN_CONT_0620","continuous",0.2557,14.97,"Fair",0.5993,0.3972,0.4713,"train"],["SYN_CONT_0621","continuous",0.0615,3.69,"Dark",0.7398,1.0691,0.4126,"train"],["SYN_CONT_0622","continuous",0.0698,4.19,"Fair",0.8499,0.4354,0.7249,"train"],["SYN_CONT_0623","continuous",0.1235,7.41,"Medium",0.714,0.7069,0.5044,"train"],["SYN_CONT_0624","continuous",0.1615,9.69,"Fair",0.7188,0.4108,0.5837,"train"],["SYN_CONT_0625","continuous",0.2069,12.37,"Fair",0.6602,0.4311,0.5337,"train"],["SYN_CONT_0626","continuous",0.123,7.38,"Dark",0.6602,1.0674,0.3453,"test"],["SYN_CONT_0627","continuous",0.1542,9.25,"Dark",0.6103,1.094,0.2869,"train"],["SYN_CONT_0628","continuous",0.2553,14.95,"Medium",0.539,0.6916,0.3291,"test"],["SYN_CONT_0629","continuous",0.0122,0.73,"Fair",0.9337,0.4276,0.807,"train"],["SYN_CONT_0630","continuous",0.0842,5.05,"Fair",0.8337,0.4053,0.702,"test"],["SYN_CONT_0631","continuous",0.2426,14.27,"Dark",0.4987,1.1105,0.1662,"train"],["SYN_CONT_0632","continuous",0.3106,17.9,"Fair",0.5405,0.4316,0.4212,"train"],["SYN_CONT_0633","continuous",0.1705,10.23,"Fair",0.7088,0.4312,0.6031,"train"],["SYN_CONT_0634","continuous",0.1773,10.64,"Fair",0.6979,0.4101,0.5601,"train"],["SYN_CONT_0635","continuous",0.0357,2.14,"Dark",0.7898,1.0683,0.4549,"train"],["SYN_CONT_0636","continuous",0.1492,8.95,"Medium",0.6871,0.7068,0.4756,"train"],["SYN_CONT_0637","continuous",0.1775,10.65,"Medium",0.6466,0.7205,0.4249,"train"],["SYN_CONT_0638","continuous",0.0808,4.85,"Fair",0.8287,0.4099,0.7154,"train"],["SYN_CONT_0639","continuous",0.0897,5.38,"Medium",0.7727,0.7086,0.5637,"train"],["SYN_CONT_0640","continuous",0.1258,7.55,"Dark",0.6502,1.0944,0.3485,"test"],["SYN_CONT_0641","continuous",0.0067,0.4,"Dark",0.8306,1.0992,0.487,"train"],["SYN_CONT_0642","continuous",0.1073,6.44,"Medium",0.7368,0.6934,0.5365,"train"],["SYN_CONT_0643","continuous",0.0705,4.23,"Medium",0.7839,0.7194,0.5897,"test"],["SYN_CONT_0644","continuous",0.1092,6.55,"Fair",0.8011,0.4147,0.6641,"train"],["SYN_CONT_0645","continuous",0.04,2.4,"Medium",0.8282,0.7305,0.6258,"train"],["SYN_CONT_0646","continuous",0.3089,17.81,"Fair",0.5352,0.4186,0.3924,"train"],["SYN_CONT_0647","continuous",0.1978,11.87,"Fair",0.6664,0.4487,0.5358,"train"],["SYN_CONT_0648","continuous",0.2296,13.58,"Dark",0.5226,1.1081,0.1816,"test"],["SYN_CONT_0649","continuous",0.2709,15.78,"Dark",0.4711,1.1047,0.1412,"train"],["SYN_CONT_0650","continuous",0.1662,9.97,"Dark",0.6273,1.0732,0.2859,"train"],["SYN_CONT_0651","continuous",0.029,1.74,"Dark",0.792,1.0935,0.4712,"train"],["SYN_CONT_0652","continuous",0.179,10.74,"Medium",0.6369,0.7102,0.4155,"train"],["SYN_CONT_0653","continuous",0.1957,11.74,"Dark",0.5688,1.1017,0.2394,"train"],["SYN_CONT_0654","continuous",0.2546,14.91,"Medium",0.5544,0.71,0.3353,"test"],["SYN_CONT_0655","continuous",0.1438,8.63,"Dark",0.6279,1.076,0.3195,"test"],["SYN_CONT_0656","continuous",0.0425,2.55,"Medium",0.843,0.7161,0.6163,"train"],["SYN_CONT_0657","continuous",0.0947,5.68,"Fair",0.808,0.4239,0.6969,"test"],["SYN_CONT_0658","continuous",0.121,7.26,"Medium",0.7378,0.6933,0.5086,"test"],["SYN_CONT_0659","continuous",0.2172,12.92,"Medium",0.5943,0.7153,0.3781,"train"],["SYN_CONT_0660","continuous",0.1903,11.42,"Dark",0.5643,1.1059,0.2479,"train"],["SYN_CONT_0661","continuous",0.1187,7.12,"Medium",0.7181,0.7154,0.5242,"test"],["SYN_CONT_0662","continuous",0.3449,19.73,"Fair",0.4914,0.4211,0.3687,"train"],["SYN_CONT_0663","continuous",0.2022,12.12,"Fair",0.6623,0.4302,0.523,"train"],["SYN_CONT_0664","continuous",0.079,4.74,"Dark",0.731,1.0628,0.4125,"test"],["SYN_CONT_0665","continuous",0.034,2.04,"Fair",0.8945,0.4247,0.7641,"train"],["SYN_CONT_0666","continuous",0.051,3.06,"Medium",0.8173,0.7338,0.5838,"train"],["SYN_CONT_0667","continuous",0.082,4.92,"Fair",0.8427,0.4206,0.6977,"train"],["SYN_CONT_0668","continuous",0.0535,3.21,"Dark",0.7506,1.1054,0.425,"train"],["SYN_CONT_0669","continuous",0.0622,3.73,"Medium",0.7947,0.7265,0.5921,"train"],["SYN_CONT_0670","continuous",0.095,5.7,"Dark",0.6944,1.0742,0.3721,"train"],["SYN_CONT_0671","continuous",0.0578,3.47,"Medium",0.8188,0.7275,0.5992,"train"],["SYN_CONT_0672","continuous",0.3114,17.94,"Fair",0.5353,0.4402,0.4056,"train"],["SYN_CONT_0673","continuous",0.0267,1.6,"Dark",0.7872,1.0898,0.4878,"test"],["SYN_CONT_0674","continuous",0.1748,10.49,"Dark",0.5844,1.0888,0.2681,"train"],["SYN_CONT_0675","continuous",0.1368,8.21,"Medium",0.7001,0.6939,0.4984,"test"],["SYN_CONT_0676","continuous",0.3434,19.65,"Dark",0.3977,1.0924,0.0448,"train"],["SYN_CONT_0677","continuous",0.0373,2.24,"Medium",0.8263,0.72,0.6323,"train"],["SYN_CONT_0678","continuous",0.1327,7.96,"Medium",0.71,0.7032,0.4906,"train"],["SYN_CONT_0679","continuous",0.3386,19.39,"Medium",0.4325,0.7091,0.2383,"train"],["SYN_CONT_0680","continuous",0.2996,17.31,"Medium",0.4775,0.7193,0.2835,"train"],["SYN_CONT_0681","continuous",0.2814,16.34,"Fair",0.5812,0.4112,0.4317,"train"],["SYN_CONT_0682","continuous",0.086,5.16,"Medium",0.7694,0.7106,0.5733,"train"],["SYN_CONT_0683","continuous",0.057,3.42,"Dark",0.76,1.0848,0.42,"train"],["SYN_CONT_0684","continuous",0.2257,13.37,"Fair",0.6496,0.4186,0.5243,"train"],["SYN_CONT_0685","continuous",0.3236,18.59,"Dark",0.4017,1.1077,0.0819,"train"],["SYN_CONT_0686","continuous",0.1857,11.14,"Fair",0.6904,0.4219,0.5606,"train"],["SYN_CONT_0687","continuous",0.1905,11.43,"Medium",0.6304,0.7098,0.4095,"train"],["SYN_CONT_0688","continuous",0.0933,5.6,"Fair",0.8157,0.4135,0.6762,"train"],["SYN_CONT_0689","continuous",0.2636,15.39,"Fair",0.596,0.416,0.4554,"train"],["SYN_CONT_0690","continuous",0.0623,3.74,"Dark",0.7335,1.0671,0.4106,"train"],["SYN_CONT_0691","continuous",0.1078,6.47,"Dark",0.6786,1.0919,0.3584,"train"],["SYN_CONT_0692","continuous",0.1418,8.51,"Medium",0.6951,0.7082,0.4835,"train"],["SYN_CONT_0693","continuous",0.1692,10.15,"Fair",0.7133,0.4119,0.5984,"train"],["SYN_CONT_0694","continuous",0.0808,4.85,"Fair",0.8485,0.4008,0.7006,"train"],["SYN_CONT_0695","continuous",0.0383,2.3,"Fair",0.8892,0.418,0.7671,"train"],["SYN_CONT_0696","continuous",0.2039,12.21,"Medium",0.6033,0.7314,0.4057,"test"],["SYN_CONT_0697","continuous",0.0962,5.77,"Medium",0.7581,0.7118,0.5548,"train"],["SYN_CONT_0698","continuous",0.1937,11.62,"Medium",0.6182,0.7012,0.4105,"train"],["SYN_CONT_0699","continuous",0.0515,3.09,"Medium",0.8258,0.7208,0.5905,"test"],["SYN_CONT_0700","continuous",0.1603,9.62,"Medium",0.6619,0.7053,0.4559,"test"],["SYN_CONT_0701","continuous",0.1775,10.65,"Dark",0.6046,1.0794,0.2649,"train"],["SYN_CONT_0702","continuous",0.0173,1.04,"Fair",0.931,0.4462,0.7888,"train"],["SYN_CONT_0703","continuous",0.1122,6.73,"Fair",0.7954,0.4181,0.6693,"train"],["SYN_CONT_0704","continuous",0.0448,2.69,"Fair",0.882,0.4333,0.7339,"train"],["SYN_CONT_0705","continuous",0.0212,1.27,"Fair",0.9195,0.4255,0.785,"train"],["SYN_CONT_0706","continuous",0.3462,19.8,"Fair",0.5051,0.4135,0.3594,"train"],["SYN_CONT_0707","continuous",0.1075,6.45,"Fair",0.8137,0.4032,0.6699,"train"],["SYN_CONT_0708","continuous",0.2788,16.2,"Fair",0.5721,0.4332,0.4475,"train"],["SYN_CONT_0709","continuous",0.0848,5.09,"Fair",0.8183,0.4107,0.6989,"train"],["SYN_CONT_0710","continuous",0.2306,13.63,"Dark",0.5193,1.1022,0.1939,"train"],["SYN_CONT_0711","continuous",0.26,15.2,"Fair",0.5826,0.4366,0.471,"train"],["SYN_CONT_0712","continuous",0.1985,11.91,"Dark",0.5711,1.104,0.239,"train"],["SYN_CONT_0713","continuous",0.1572,9.43,"Medium",0.6764,0.7192,0.4651,"train"],["SYN_CONT_0714","continuous",0.1373,8.24,"Fair",0.7564,0.4402,0.6391,"test"],["SYN_CONT_0715","continuous",0.1163,6.98,"Medium",0.7332,0.6889,0.5078,"test"],["SYN_CONT_0716","continuous",0.3236,18.59,"Medium",0.4623,0.7032,0.2445,"train"],["SYN_CONT_0717","continuous",0.2864,16.61,"Medium",0.5074,0.7201,0.3005,"train"],["SYN_CONT_0718","continuous",0.3369,19.3,"Dark",0.3782,1.0898,0.0537,"train"],["SYN_CONT_0719","continuous",0.0415,2.49,"Medium",0.8298,0.7142,0.6136,"train"],["SYN_CONT_0720","continuous",0.2491,14.62,"Medium",0.5427,0.7054,0.3363,"train"],["SYN_CONT_0721","continuous",0.3269,18.77,"Medium",0.4323,0.7221,0.254,"train"],["SYN_CONT_0722","continuous",0.0603,3.62,"Fair",0.8589,0.4261,0.7248,"test"],["SYN_CONT_0723","continuous",0.0222,1.33,"Fair",0.9263,0.4434,0.7867,"train"],["SYN_CONT_0724","continuous",0.2529,14.82,"Dark",0.5003,1.0982,0.1524,"train"],["SYN_CONT_0725","continuous",0.1915,11.49,"Dark",0.5664,1.0988,0.2368,"train"],["SYN_CONT_0726","continuous",0.2908,16.84,"Fair",0.5565,0.423,0.4304,"train"],["SYN_CONT_0727","continuous",0.0467,2.8,"Dark",0.7691,1.0787,0.4361,"train"],["SYN_CONT_0728","continuous",0.2733,15.91,"Fair",0.5698,0.4349,0.4357,"train"],["SYN_CONT_0729","continuous",0.0672,4.03,"Medium",0.8062,0.727,0.5806,"train"],["SYN_CONT_0730","continuous",0.0545,3.27,"Medium",0.7939,0.7146,0.5987,"train"],["SYN_CONT_0731","continuous",0.0548,3.29,"Dark",0.7492,1.0829,0.4432,"train"],["SYN_CONT_0732","continuous",0.2804,16.29,"Fair",0.5765,0.4154,0.431,"train"],["SYN_CONT_0733","continuous",0.2244,13.3,"Fair",0.6388,0.4262,0.5169,"train"],["SYN_CONT_0734","continuous",0.1743,10.46,"Dark",0.5889,1.0974,0.281,"train"],["SYN_CONT_0735","continuous",0.1197,7.18,"Fair",0.7878,0.4135,0.6556,"test"],["SYN_CONT_0736","continuous",0.3039,17.54,"Medium",0.4816,0.7149,0.2686,"test"],["SYN_CONT_0737","continuous",0.1308,7.85,"Dark",0.6531,1.0798,0.325,"train"],["SYN_CONT_0738","continuous",0.2812,16.33,"Dark",0.4458,1.0978,0.1279,"train"],["SYN_CONT_0739","continuous",0.1463,8.78,"Fair",0.749,0.4139,0.629,"train"],["SYN_CONT_0740","continuous",0.1257,7.54,"Dark",0.6528,1.0948,0.3225,"test"],["SYN_CONT_0741","continuous",0.1542,9.25,"Fair",0.7378,0.4256,0.6017,"train"],["SYN_CONT_0742","continuous",0.1005,6.03,"Fair",0.8107,0.4229,0.6666,"test"],["SYN_CONT_0743","continuous",0.2553,14.95,"Fair",0.6067,0.4014,0.4671,"train"],["SYN_CONT_0744","continuous",0.1675,10.05,"Fair",0.7292,0.4177,0.5798,"train"],["SYN_CONT_0745","continuous",0.0773,4.64,"Fair",0.8372,0.4397,0.6985,"train"],["SYN_CONT_0746","continuous",0.3123,17.99,"Dark",0.4096,1.1075,0.1051,"test"],["SYN_CONT_0747","continuous",0.128,7.68,"Medium",0.7118,0.6904,0.5186,"test"],["SYN_CONT_0748","continuous",0.1812,10.87,"Medium",0.6526,0.7149,0.4209,"train"],["SYN_CONT_0749","continuous",0.3149,18.13,"Dark",0.4143,1.0907,0.0897,"train"],["SYN_CONT_0750","continuous",0.209,12.48,"Dark",0.5584,1.1082,0.2083,"train"],["SYN_CONT_0751","continuous",0.039,2.34,"Medium",0.8474,0.7209,0.6266,"test"],["SYN_CONT_0752","continuous",0.3275,18.8,"Medium",0.4668,0.6904,0.2443,"train"],["SYN_CONT_0753","continuous",0.2103,12.55,"Medium",0.5969,0.6936,0.3911,"train"],["SYN_CONT_0754","continuous",0.1117,6.7,"Medium",0.7551,0.6828,0.5244,"test"],["SYN_CONT_0755","continuous",0.0465,2.79,"Medium",0.831,0.7205,0.6092,"train"],["SYN_CONT_0756","continuous",0.2728,15.88,"Fair",0.5704,0.4275,0.4472,"train"],["SYN_CONT_0757","continuous",0.2075,12.4,"Dark",0.5311,1.1114,0.2265,"train"],["SYN_CONT_0758","continuous",0.1778,10.67,"Fair",0.7026,0.4279,0.5831,"train"],["SYN_CONT_0759","continuous",0.3102,17.88,"Medium",0.4783,0.7117,0.2634,"train"],["SYN_CONT_0760","continuous",0.2707,15.77,"Medium",0.5364,0.7085,0.3158,"test"],["SYN_CONT_0761","continuous",0.0505,3.03,"Medium",0.8101,0.7227,0.5977,"test"],["SYN_CONT_0762","continuous",0.1038,6.23,"Fair",0.7977,0.4026,0.671,"test"],["SYN_CONT_0763","continuous",0.0828,4.97,"Fair",0.8483,0.4302,0.7216,"train"],["SYN_CONT_0764","continuous",0.254,14.88,"Medium",0.5369,0.7071,0.3244,"train"],["SYN_CONT_0765","continuous",0.0112,0.67,"Fair",0.9217,0.4131,0.8105,"test"],["SYN_CONT_0766","continuous",0.19,11.4,"Fair",0.6824,0.4387,0.562,"train"],["SYN_CONT_0767","continuous",0.2609,15.25,"Medium",0.5565,0.6911,0.3363,"train"],["SYN_CONT_0768","continuous",0.3039,17.54,"Fair",0.551,0.4133,0.4229,"train"],["SYN_CONT_0769","continuous",0.114,6.84,"Dark",0.6785,1.0719,0.347,"train"],["SYN_CONT_0770","continuous",0.2831,16.43,"Dark",0.4487,1.115,0.1261,"test"],["SYN_CONT_0771","continuous",0.0368,2.21,"Dark",0.7887,1.0795,0.45,"train"],["SYN_CONT_0772","continuous",0.2924,16.93,"Dark",0.4514,1.0803,0.1113,"test"],["SYN_CONT_0773","continuous",0.0425,2.55,"Medium",0.8318,0.7196,0.6145,"train"],["SYN_CONT_0774","continuous",0.1325,7.95,"Medium",0.7096,0.7102,0.5014,"train"],["SYN_CONT_0775","continuous",0.2741,15.95,"Medium",0.5138,0.7022,0.3197,"train"],["SYN_CONT_0776","continuous",0.05,3.0,"Dark",0.7712,1.0763,0.4398,"train"],["SYN_CONT_0777","continuous",0.0765,4.59,"Dark",0.7116,1.0799,0.4188,"train"],["SYN_CONT_0778","continuous",0.2459,14.45,"Fair",0.6068,0.4186,0.4925,"train"],["SYN_CONT_0779","continuous",0.245,14.4,"Fair",0.6033,0.4207,0.4923,"train"],["SYN_CONT_0780","continuous",0.2154,12.82,"Dark",0.5338,1.0966,0.2151,"train"],["SYN_CONT_0781","continuous",0.2352,13.88,"Dark",0.5174,1.1003,0.182,"train"],["SYN_CONT_0782","continuous",0.1808,10.85,"Dark",0.5872,1.093,0.2596,"train"],["SYN_CONT_0783","continuous",0.084,5.04,"Dark",0.7131,1.0746,0.3862,"train"],["SYN_CONT_0784","continuous",0.1152,6.91,"Fair",0.7871,0.4049,0.6546,"test"],["SYN_CONT_0785","continuous",0.0605,3.63,"Dark",0.7516,1.0879,0.43,"train"],["SYN_CONT_0786","continuous",0.3157,18.17,"Fair",0.5236,0.4264,0.4047,"train"],["SYN_CONT_0787","continuous",0.1945,11.67,"Dark",0.5691,1.0901,0.2372,"test"],["SYN_CONT_0788","continuous",0.1337,8.02,"Dark",0.6518,1.0802,0.3082,"test"],["SYN_CONT_0789","continuous",0.154,9.24,"Dark",0.6223,1.1083,0.2923,"train"],["SYN_CONT_0790","continuous",0.3303,18.95,"Fair",0.5029,0.425,0.3848,"test"],["SYN_CONT_0791","continuous",0.0512,3.07,"Fair",0.884,0.417,0.7514,"train"],["SYN_CONT_0792","continuous",0.1953,11.72,"Medium",0.6251,0.7081,0.4102,"train"],["SYN_CONT_0793","continuous",0.1687,10.12,"Dark",0.6092,1.0993,0.2646,"train"],["SYN_CONT_0794","continuous",0.2043,12.23,"Medium",0.6152,0.7091,0.3963,"test"],["SYN_CONT_0795","continuous",0.006,0.36,"Medium",0.8832,0.7097,0.6788,"test"],["SYN_CONT_0796","continuous",0.302,17.44,"Fair",0.5435,0.412,0.4141,"test"],["SYN_CONT_0797","continuous",0.3245,18.64,"Fair",0.5174,0.434,0.3943,"train"],["SYN_CONT_0798","continuous",0.1883,11.3,"Medium",0.6232,0.7337,0.4195,"train"],["SYN_CONT_0799","continuous",0.2362,13.93,"Dark",0.5231,1.0961,0.1879,"train"],["SYN_CONT_0800","continuous",0.3209,18.45,"Fair",0.5271,0.4341,0.4023,"train"],["SYN_CONT_0801","continuous",0.2401,14.14,"Dark",0.515,1.0942,0.1742,"train"],["SYN_CONT_0802","continuous",0.0508,3.05,"Dark",0.7655,1.099,0.4342,"test"],["SYN_CONT_0803","continuous",0.1922,11.53,"Medium",0.6333,0.7237,0.4046,"train"],["SYN_CONT_0804","continuous",0.2024,12.13,"Medium",0.6043,0.7084,0.4005,"train"],["SYN_CONT_0805","continuous",0.1413,8.48,"Medium",0.6902,0.7177,0.4865,"train"],["SYN_CONT_0806","continuous",0.2512,14.73,"Medium",0.5505,0.6922,0.3277,"train"],["SYN_CONT_0807","continuous",0.3254,18.69,"Fair",0.517,0.4003,0.3964,"train"],["SYN_CONT_0808","continuous",0.3221,18.51,"Fair",0.5177,0.4543,0.4109,"train"],["SYN_CONT_0809","continuous",0.1503,9.02,"Medium",0.6806,0.704,0.4785,"train"],["SYN_CONT_0810","continuous",0.0377,2.26,"Fair",0.9059,0.4112,0.7497,"train"],["SYN_CONT_0811","continuous",0.3444,19.7,"Medium",0.429,0.7062,0.2279,"train"],["SYN_CONT_0812","continuous",0.2896,16.78,"Dark",0.4548,1.082,0.0995,"train"],["SYN_CONT_0813","continuous",0.0415,2.49,"Dark",0.7828,1.08,0.4333,"test"],["SYN_CONT_0814","continuous",0.3204,18.42,"Dark",0.4091,1.0999,0.0794,"train"],["SYN_CONT_0815","continuous",0.3012,17.4,"Medium",0.4841,0.7017,0.2738,"train"],["SYN_CONT_0816","continuous",0.173,10.38,"Dark",0.5842,1.0848,0.2716,"train"],["SYN_CONT_0817","continuous",0.1972,11.83,"Fair",0.6784,0.4311,0.5391,"train"],["SYN_CONT_0818","continuous",0.133,7.98,"Dark",0.6483,1.0581,0.3272,"train"],["SYN_CONT_0819","continuous",0.0183,1.1,"Dark",0.8198,1.0689,0.4785,"test"],["SYN_CONT_0820","continuous",0.1117,6.7,"Dark",0.6816,1.086,0.3534,"test"],["SYN_CONT_0821","continuous",0.2761,16.06,"Fair",0.5711,0.4052,0.4499,"test"],["SYN_CONT_0822","continuous",0.0015,0.09,"Medium",0.9052,0.7131,0.6756,"train"],["SYN_CONT_0823","continuous",0.1112,6.67,"Fair",0.7954,0.4121,0.6626,"test"],["SYN_CONT_0824","continuous",0.1327,7.96,"Medium",0.7128,0.7055,0.4954,"train"],["SYN_CONT_0825","continuous",0.1792,10.75,"Medium",0.6347,0.721,0.4355,"train"],["SYN_CONT_0826","continuous",0.32,18.4,"Dark",0.404,1.102,0.0768,"train"],["SYN_CONT_0827","continuous",0.1155,6.93,"Medium",0.7235,0.694,0.5051,"train"],["SYN_CONT_0828","continuous",0.1157,6.94,"Fair",0.7905,0.3948,0.6529,"train"],["SYN_CONT_0829","continuous",0.2516,14.75,"Fair",0.5908,0.4257,0.4782,"train"],["SYN_CONT_0830","continuous",0.1507,9.04,"Medium",0.679,0.6946,0.4607,"train"],["SYN_CONT_0831","continuous",0.0748,4.49,"Dark",0.7334,1.0746,0.4082,"train"],["SYN_CONT_0832","continuous",0.1508,9.05,"Dark",0.6183,1.0871,0.3102,"train"],["SYN_CONT_0833","continuous",0.047,2.82,"Fair",0.8846,0.4253,0.7532,"train"],["SYN_CONT_0834","continuous",0.0588,3.53,"Dark",0.7499,1.0865,0.4233,"train"],["SYN_CONT_0835","continuous",0.1662,9.97,"Medium",0.659,0.7087,0.4404,"test"],["SYN_CONT_0836","continuous",0.1397,8.38,"Medium",0.6885,0.6901,0.4727,"test"],["SYN_CONT_0837","continuous",0.3181,18.3,"Fair",0.5142,0.4237,0.3902,"train"],["SYN_CONT_0838","continuous",0.1208,7.25,"Medium",0.7266,0.7024,0.4961,"train"],["SYN_CONT_0839","continuous",0.1935,11.61,"Fair",0.6861,0.4368,0.5443,"train"],["SYN_CONT_0840","continuous",0.2122,12.65,"Medium",0.6022,0.7006,0.3868,"train"],["SYN_CONT_0841","continuous",0.0043,0.26,"Fair",0.9262,0.4029,0.807,"train"],["SYN_CONT_0842","continuous",0.2238,13.27,"Dark",0.5273,1.0944,0.1893,"train"],["SYN_CONT_0843","continuous",0.0593,3.56,"Medium",0.8047,0.719,0.5927,"test"],["SYN_CONT_0844","continuous",0.3354,19.22,"Medium",0.4467,0.6943,0.2443,"train"],["SYN_CONT_0845","continuous",0.0495,2.97,"Fair",0.8673,0.4348,0.7571,"test"],["SYN_CONT_0846","continuous",0.1382,8.29,"Fair",0.7599,0.4156,0.6266,"train"],["SYN_CONT_0847","continuous",0.0285,1.71,"Medium",0.8594,0.7015,0.6286,"test"],["SYN_CONT_0848","continuous",0.3489,19.94,"Fair",0.4822,0.4325,0.3624,"train"],["SYN_CONT_0849","continuous",0.1673,10.04,"Medium",0.651,0.7036,0.4418,"test"],["SYN_CONT_0850","continuous",0.1985,11.91,"Dark",0.5544,1.1093,0.2192,"test"],["SYN_CONT_0851","continuous",0.0223,1.34,"Fair",0.9254,0.4327,0.7939,"train"],["SYN_CONT_0852","continuous",0.2562,15.0,"Medium",0.5402,0.7048,0.3205,"train"],["SYN_CONT_0853","continuous",0.07,4.2,"Dark",0.7322,1.0869,0.4222,"train"],["SYN_CONT_0854","continuous",0.3117,17.96,"Dark",0.4098,1.0889,0.0897,"train"],["SYN_CONT_0855","continuous",0.0683,4.1,"Medium",0.7842,0.7186,0.5757,"train"],["SYN_CONT_0856","continuous",0.0635,3.81,"Fair",0.8561,0.4201,0.7239,"train"],["SYN_CONT_0857","continuous",0.0122,0.73,"Medium",0.8739,0.7103,0.6573,"train"],["SYN_CONT_0858","continuous",0.1573,9.44,"Dark",0.6106,1.0904,0.3035,"test"],["SYN_CONT_0859","continuous",0.1883,11.3,"Medium",0.6311,0.7188,0.4062,"train"],["SYN_CONT_0860","continuous",0.0218,1.31,"Fair",0.9144,0.4134,0.7741,"train"],["SYN_CONT_0861","continuous",0.2658,15.51,"Dark",0.47,1.1075,0.1549,"train"],["SYN_CONT_0862","continuous",0.1512,9.07,"Medium",0.6828,0.6898,0.4678,"train"],["SYN_CONT_0863","continuous",0.1748,10.49,"Fair",0.7086,0.4267,0.564,"train"],["SYN_CONT_0864","continuous",0.147,8.82,"Dark",0.6235,1.0835,0.3097,"train"],["SYN_CONT_0865","continuous",0.1337,8.02,"Fair",0.7446,0.4151,0.6383,"train"],["SYN_CONT_0866","continuous",0.1865,11.19,"Dark",0.5833,1.1029,0.2524,"test"],["SYN_CONT_0867","continuous",0.0517,3.1,"Medium",0.8123,0.7003,0.5997,"train"],["SYN_CONT_0868","continuous",0.0607,3.64,"Fair",0.8695,0.4397,0.7395,"train"],["SYN_CONT_0869","continuous",0.2982,17.24,"Dark",0.4389,1.0972,0.103,"train"],["SYN_CONT_0870","continuous",0.3298,18.92,"Fair",0.5083,0.438,0.3754,"train"],["SYN_CONT_0871","continuous",0.1245,7.47,"Fair",0.7876,0.4117,0.6608,"train"],["SYN_CONT_0872","continuous",0.0902,5.41,"Medium",0.7535,0.7098,0.5477,"train"],["SYN_CONT_0873","continuous",0.2165,12.88,"Fair",0.64,0.4311,0.5307,"test"],["SYN_CONT_0874","continuous",0.1362,8.17,"Dark",0.6387,1.0659,0.3205,"train"],["SYN_CONT_0875","continuous",0.0085,0.51,"Dark",0.8214,1.0872,0.5052,"train"],["SYN_CONT_0876","continuous",0.052,3.12,"Dark",0.7608,1.1078,0.4363,"train"],["SYN_CONT_0877","continuous",0.2435,14.32,"Dark",0.501,1.081,0.1725,"train"],["SYN_CONT_0878","continuous",0.2221,13.18,"Medium",0.5837,0.7181,0.3776,"train"],["SYN_CONT_0879","continuous",0.009,0.54,"Fair",0.9207,0.4235,0.809,"train"],["SYN_CONT_0880","continuous",0.074,4.44,"Medium",0.7996,0.7193,0.5804,"train"],["SYN_CONT_0881","continuous",0.077,4.62,"Fair",0.8398,0.4231,0.7235,"train"],["SYN_CONT_0882","continuous",0.227,13.44,"Fair",0.6275,0.4247,0.5035,"train"],["SYN_CONT_0883","continuous",0.0065,0.39,"Fair",0.9365,0.4336,0.8023,"train"],["SYN_CONT_0884","continuous",0.0347,2.08,"Medium",0.8233,0.7128,0.6347,"train"],["SYN_CONT_0885","continuous",0.275,16.0,"Fair",0.5823,0.4293,0.4483,"test"],["SYN_CONT_0886","continuous",0.0595,3.57,"Medium",0.7975,0.7214,0.5862,"train"],["SYN_CONT_0887","continuous",0.2197,13.05,"Dark",0.5509,1.1044,0.1992,"train"],["SYN_CONT_0888","continuous",0.0793,4.76,"Dark",0.7186,1.0773,0.3981,"train"],["SYN_CONT_0889","continuous",0.0332,1.99,"Fair",0.9072,0.4285,0.7644,"train"],["SYN_CONT_0890","continuous",0.081,4.86,"Medium",0.7927,0.7081,0.5715,"train"],["SYN_CONT_0891","continuous",0.2459,14.45,"Dark",0.4959,1.1006,0.1741,"train"],["SYN_CONT_0892","continuous",0.2958,17.11,"Medium",0.4794,0.7238,0.2938,"train"],["SYN_CONT_0893","continuous",0.2862,16.6,"Medium",0.5033,0.6932,0.298,"test"],["SYN_CONT_0894","continuous",0.1323,7.94,"Fair",0.7647,0.42,0.6406,"test"],["SYN_CONT_0895","continuous",0.2255,13.36,"Dark",0.5303,1.1128,0.2013,"train"],["SYN_CONT_0896","continuous",0.0683,4.1,"Fair",0.8427,0.4363,0.7374,"train"],["SYN_CONT_0897","continuous",0.0977,5.86,"Fair",0.8364,0.3997,0.6898,"train"],["SYN_CONT_0898","continuous",0.3112,17.93,"Dark",0.4027,1.0981,0.0872,"train"],["SYN_CONT_0899","continuous",0.0043,0.26,"Dark",0.8433,1.0731,0.4902,"train"],["SYN_CONT_0900","continuous",0.0285,1.71,"Medium",0.8473,0.6959,0.6424,"test"],["SYN_CONT_0901","continuous",0.0693,4.16,"Dark",0.7208,1.0826,0.396,"train"],["SYN_CONT_0902","continuous",0.0088,0.53,"Medium",0.8761,0.7282,0.668,"train"],["SYN_CONT_0903","continuous",0.0605,3.63,"Medium",0.7994,0.7155,0.5917,"train"],["SYN_CONT_0904","continuous",0.1943,11.66,"Medium",0.6255,0.6958,0.4137,"train"],["SYN_CONT_0905","continuous",0.1405,8.43,"Dark",0.6179,1.0759,0.311,"test"],["SYN_CONT_0906","continuous",0.3097,17.85,"Fair",0.5396,0.4229,0.3965,"train"],["SYN_CONT_0907","continuous",0.2816,16.35,"Medium",0.5044,0.7065,0.3003,"train"],["SYN_CONT_0908","continuous",0.114,6.84,"Fair",0.7843,0.408,0.6707,"train"],["SYN_CONT_0909","continuous",0.0865,5.19,"Fair",0.8222,0.4145,0.7191,"train"],["SYN_CONT_0910","continuous",0.1265,7.59,"Dark",0.6473,1.0594,0.3416,"train"],["SYN_CONT_0911","continuous",0.1968,11.81,"Fair",0.6709,0.4262,0.5412,"test"],["SYN_CONT_0912","continuous",0.0893,5.36,"Fair",0.8204,0.4303,0.7046,"train"],["SYN_CONT_0913","continuous",0.209,12.48,"Dark",0.5537,1.0852,0.2078,"train"],["SYN_CONT_0914","continuous",0.1365,8.19,"Medium",0.6783,0.6956,0.4976,"train"],["SYN_CONT_0915","continuous",0.184,11.04,"Fair",0.6979,0.4246,0.5655,"train"],["SYN_CONT_0916","continuous",0.1453,8.72,"Dark",0.6274,1.0856,0.3139,"train"],["SYN_CONT_0917","continuous",0.0982,5.89,"Fair",0.7976,0.4137,0.6947,"train"],["SYN_CONT_0918","continuous",0.3307,18.97,"Fair",0.5049,0.4283,0.4043,"train"],["SYN_CONT_0919","continuous",0.2613,15.27,"Medium",0.5367,0.7098,0.3199,"train"],["SYN_CONT_0920","continuous",0.0467,2.8,"Fair",0.8819,0.4339,0.7532,"train"],["SYN_CONT_0921","continuous",0.3007,17.37,"Dark",0.4243,1.0954,0.1162,"test"],["SYN_CONT_0922","continuous",0.1625,9.75,"Fair",0.7266,0.4321,0.5944,"train"],["SYN_CONT_0923","continuous",0.3104,17.89,"Medium",0.4823,0.7054,0.2579,"train"],["SYN_CONT_0924","continuous",0.275,16.0,"Medium",0.523,0.6951,0.3039,"test"],["SYN_CONT_0925","continuous",0.1417,8.5,"Dark",0.6394,1.0855,0.3037,"train"],["SYN_CONT_0926","continuous",0.0075,0.45,"Medium",0.8889,0.7172,0.6614,"train"],["SYN_CONT_0927","continuous",0.0895,5.37,"Fair",0.81,0.4128,0.6945,"train"],["SYN_CONT_0928","continuous",0.1805,10.83,"Medium",0.6416,0.7044,0.4122,"train"],["SYN_CONT_0929","continuous",0.2126,12.67,"Dark",0.5392,1.0961,0.2177,"train"],["SYN_CONT_0930","continuous",0.086,5.16,"Medium",0.765,0.7224,0.5436,"train"],["SYN_CONT_0931","continuous",0.0465,2.79,"Medium",0.8364,0.7171,0.617,"train"],["SYN_CONT_0932","continuous",0.2881,16.7,"Medium",0.5048,0.7155,0.2898,"test"],["SYN_CONT_0933","continuous",0.3442,19.69,"Dark",0.3695,1.1046,0.0502,"train"],["SYN_CONT_0934","continuous",0.1752,10.51,"Medium",0.6498,0.7199,0.4275,"train"],["SYN_CONT_0935","continuous",0.0572,3.43,"Medium",0.8157,0.7112,0.5948,"train"],["SYN_CONT_0936","continuous",0.0908,5.45,"Fair",0.821,0.3987,0.6901,"train"],["SYN_CONT_0937","continuous",0.0062,0.37,"Dark",0.8362,1.0901,0.5005,"train"],["SYN_CONT_0938","continuous",0.3179,18.29,"Medium",0.4689,0.6992,0.2672,"train"],["SYN_CONT_0939","continuous",0.0393,2.36,"Dark",0.7773,1.0902,0.4617,"train"],["SYN_CONT_0940","continuous",0.1922,11.53,"Medium",0.6185,0.7248,0.3997,"train"],["SYN_CONT_0941","continuous",0.0913,5.48,"Medium",0.7762,0.6997,0.5502,"train"],["SYN_CONT_0942","continuous",0.1847,11.08,"Medium",0.6199,0.7039,0.4141,"train"],["SYN_CONT_0943","continuous",0.2193,13.03,"Fair",0.6429,0.4273,0.5268,"train"],["SYN_CONT_0944","continuous",0.2861,16.59,"Fair",0.5658,0.4273,0.4281,"test"],["SYN_CONT_0945","continuous",0.0688,4.13,"Fair",0.8433,0.4405,0.7178,"test"],["SYN_CONT_0946","continuous",0.0037,0.22,"Dark",0.8421,1.0783,0.5047,"train"],["SYN_CONT_0947","continuous",0.0457,2.74,"Dark",0.7786,1.1019,0.4424,"train"],["SYN_CONT_0948","continuous",0.3125,18.0,"Fair",0.5279,0.4219,0.407,"train"],["SYN_CONT_0949","continuous",0.3027,17.48,"Dark",0.437,1.0932,0.1069,"train"],["SYN_CONT_0950","continuous",0.1992,11.95,"Medium",0.6282,0.7137,0.4047,"train"],["SYN_CONT_0951","continuous",0.2002,12.01,"Medium",0.6016,0.6837,0.4039,"test"],["SYN_CONT_0952","continuous",0.2244,13.3,"Medium",0.5829,0.7032,0.373,"train"],["SYN_CONT_0953","continuous",0.0585,3.51,"Fair",0.864,0.4379,0.7371,"train"],["SYN_CONT_0954","continuous",0.3179,18.29,"Dark",0.405,1.102,0.0816,"train"],["SYN_CONT_0955","continuous",0.1397,8.38,"Fair",0.7583,0.4132,0.6235,"train"],["SYN_CONT_0956","continuous",0.1277,7.66,"Dark",0.6578,1.0784,0.3374,"train"],["SYN_CONT_0957","continuous",0.173,10.38,"Medium",0.6488,0.6889,0.4353,"train"],["SYN_CONT_0958","continuous",0.0157,0.94,"Fair",0.9277,0.4202,0.7924,"test"],["SYN_CONT_0959","continuous",0.0555,3.33,"Dark",0.7643,1.0807,0.4177,"test"],["SYN_CONT_0960","continuous",0.2517,14.76,"Dark",0.4922,1.0917,0.1568,"train"],["SYN_CONT_0961","continuous",0.0277,1.66,"Medium",0.8509,0.7204,0.6375,"train"],["SYN_CONT_0962","continuous",0.2011,12.06,"Fair",0.673,0.4481,0.5389,"test"],["SYN_CONT_0963","continuous",0.0818,4.91,"Fair",0.8349,0.4122,0.7008,"train"],["SYN_CONT_0964","continuous",0.1298,7.79,"Fair",0.7627,0.4112,0.6455,"train"],["SYN_CONT_0965","continuous",0.0962,5.77,"Medium",0.7752,0.6944,0.5426,"train"],["SYN_CONT_0966","continuous",0.1185,7.11,"Fair",0.7823,0.4177,0.6608,"train"],["SYN_CONT_0967","continuous",0.2446,14.38,"Medium",0.5686,0.6828,0.3272,"train"],["SYN_CONT_0968","continuous",0.099,5.94,"Medium",0.7484,0.7114,0.5298,"test"],["SYN_CONT_0969","continuous",0.1888,11.33,"Medium",0.6052,0.7146,0.4186,"train"],["SYN_CONT_0970","continuous",0.1587,9.52,"Dark",0.6059,1.0777,0.2806,"train"],["SYN_CONT_0971","continuous",0.2238,13.27,"Fair",0.643,0.4221,0.5176,"train"],["SYN_CONT_0972","continuous",0.3264,18.74,"Fair",0.4908,0.413,0.3781,"test"],["SYN_CONT_0973","continuous",0.2497,14.65,"Medium",0.55,0.7013,0.3464,"train"],["SYN_CONT_0974","continuous",0.0717,4.3,"Medium",0.7758,0.7118,0.5817,"train"],["SYN_CONT_0975","continuous",0.0103,0.62,"Fair",0.9432,0.4172,0.8043,"train"],["SYN_CONT_0976","continuous",0.0875,5.25,"Medium",0.7541,0.6811,0.5638,"train"],["SYN_CONT_0977","continuous",0.1983,11.9,"Fair",0.6742,0.4415,0.5344,"train"],["SYN_CONT_0978","continuous",0.0172,1.03,"Dark",0.8141,1.1021,0.4883,"train"],["SYN_CONT_0979","continuous",0.1655,9.93,"Medium",0.6635,0.7066,0.4367,"train"],["SYN_CONT_0980","continuous",0.199,11.94,"Fair",0.6842,0.4237,0.5485,"train"],["SYN_CONT_0981","continuous",0.1113,6.68,"Medium",0.723,0.6893,0.5366,"train"],["SYN_CONT_0982","continuous",0.2641,15.42,"Fair",0.5889,0.4403,0.4633,"train"],["SYN_CONT_0983","continuous",0.0355,2.13,"Fair",0.8804,0.436,0.7623,"train"],["SYN_CONT_0984","continuous",0.025,1.5,"Medium",0.8616,0.7153,0.6292,"train"],["SYN_CONT_0985","continuous",0.248,14.56,"Dark",0.4995,1.1188,0.1731,"test"],["SYN_CONT_0986","continuous",0.1652,9.91,"Fair",0.7189,0.4338,0.5941,"train"],["SYN_CONT_0987","continuous",0.2332,13.77,"Fair",0.6321,0.4169,0.5039,"train"],["SYN_CONT_0988","continuous",0.145,8.7,"Fair",0.7551,0.4106,0.6325,"train"],["SYN_CONT_0989","continuous",0.0822,4.93,"Dark",0.7189,1.0683,0.4045,"train"],["SYN_CONT_0990","continuous",0.2821,16.38,"Dark",0.4533,1.1021,0.1249,"train"],["SYN_CONT_0991","continuous",0.2748,15.99,"Medium",0.5203,0.7099,0.3116,"train"],["SYN_CONT_0992","continuous",0.2354,13.89,"Dark",0.4979,1.0864,0.192,"test"],["SYN_CONT_0993","continuous",0.0907,5.44,"Medium",0.763,0.6985,0.5421,"train"],["SYN_CONT_0994","continuous",0.1967,11.8,"Medium",0.6099,0.6894,0.4049,"test"],["SYN_CONT_0995","continuous",0.1203,7.22,"Dark",0.6624,1.0664,0.3438,"train"],["SYN_CONT_0996","continuous",0.0305,1.83,"Medium",0.8512,0.737,0.6214,"train"],["SYN_CONT_0997","continuous",0.3191,18.35,"Dark",0.4188,1.1018,0.0757,"train"],["SYN_CONT_0998","continuous",0.0457,2.74,"Medium",0.8287,0.7146,0.6128,"train"],["SYN_CONT_0999","continuous",0.3312,19.0,"Dark",0.4064,1.0973,0.0711,"train"],["SYN_CONT_1000","continuous",0.1487,8.92,"Dark",0.6249,1.0698,0.3013,"test"]];
+
+function mlPredict(sb, sm) {
+  var scRaw = Number(sb) + M.k * Number(sm);
+  var sc   = parseFloat(scRaw.toFixed(4));
+  var bili = parseFloat(Math.max(0, M.b0 + M.b1 * scRaw).toFixed(1));
+  var ci   = 1.96 * M.rmse; // descriptive test-set RMSE multiplier; not a clinical prediction interval
+  return {
+    bili: bili, sc: sc,
+    lo:   parseFloat(Math.max(0, bili-ci).toFixed(1)),
+    hi:   parseFloat((bili+ci).toFixed(1)),
+    conf: parseFloat((M.r2*100).toFixed(1))
+  };
+}
+
+// ── STATE ─────────────────────────────────
+var readings=[], readN=0, zoneCounts=[0,0,0,0];
+
+// ── CLOCK ─────────────────────────────────
+function tick(){ document.getElementById('clock').textContent=new Date().toLocaleTimeString('en-IN',{hour12:false}); }
+setInterval(tick,1000); tick();
+
+// ── TAB SWITCH ────────────────────────────
+function showTab(id,btn){
+  document.querySelectorAll('.page').forEach(function(p){p.classList.remove('active');});
+  document.querySelectorAll('.tab-btn').forEach(function(b){b.classList.remove('active');});
+  document.getElementById('page-'+id).classList.add('active');
+  btn.classList.add('active');
+}
+
+// ── CHART DEFAULTS ────────────────────────
+Chart.defaults.color='#7a90b0';
+Chart.defaults.font.family='Segoe UI,Arial,sans-serif';
+Chart.defaults.font.size=11;
+
+// ── TREND CHART ───────────────────────────
+var tCtx=document.getElementById('trendChart').getContext('2d');
+var tChart=new Chart(tCtx,{
+  type:'line',
+  data:{
+    labels:[],
+    datasets:[
+      {label:'ML bili (mg/dL)',data:[],borderColor:'#60a5fa',backgroundColor:'rgba(96,165,250,0.07)',
+       tension:.4,pointRadius:5,pointBackgroundColor:'#60a5fa',fill:true},
+      {label:'Phototherapy line (17)',data:[],borderColor:'rgba(239,68,68,.5)',
+       borderDash:[6,4],borderWidth:1.5,pointRadius:0,fill:false}
+    ]
+  },
+  options:{
+    responsive:true,
+    plugins:{legend:{labels:{color:'#7a90b0'}}},
+    scales:{
+      x:{grid:{color:'#1e2d45'},ticks:{color:'#7a90b0'}},
+      y:{min:0,max:24,grid:{color:'#1e2d45'},ticks:{color:'#7a90b0',stepSize:4}}
+    }
+  }
+});
+
+// ── CALIBRATION CHART (all 1,000 synthetic samples) ────────────────
+var scArr=PD.map(function(p){return p[5]+M.k*p[6];});
+var scMin=Math.min.apply(null,scArr), scMax=Math.max.apply(null,scArr);
+var regLine=[{x:scMin,y:M.b0+M.b1*scMin},{x:scMax,y:M.b0+M.b1*scMax}];
+var predArr=PD.map(function(p,i){return M.b0+M.b1*scArr[i];});
+var residArr=PD.map(function(p,i){return predArr[i]-p[3];});
+var SKIN_COLORS={Fair:'#60a5fa',Medium:'#f59e0b',Dark:'#f87171'};
+function makePts(tone){
+  return PD.reduce(function(pts,p,i){
+    if(p[4]===tone)pts.push({x:scArr[i],y:p[3]});
+    return pts;
+  },[]);
+}
+var cCtx=document.getElementById('calibChart').getContext('2d');
+var cChart=new Chart(cCtx,{
+  type:'scatter',
+  data:{datasets:[
+    {label:'Fair skin ('+PD.filter(function(p){return p[4]==='Fair';}).length+')',data:makePts('Fair'),backgroundColor:'rgba(96,165,250,.65)',pointRadius:3,pointHoverRadius:6},
+    {label:'Medium skin ('+PD.filter(function(p){return p[4]==='Medium';}).length+')',data:makePts('Medium'),backgroundColor:'rgba(245,158,11,.65)',pointRadius:3,pointHoverRadius:6},
+    {label:'Dark skin ('+PD.filter(function(p){return p[4]==='Dark';}).length+')',data:makePts('Dark'),backgroundColor:'rgba(248,113,113,.65)',pointRadius:3,pointHoverRadius:6},
+    {label:'Trained regression (test R²='+M.r2.toFixed(4)+')',type:'line',data:regLine,
+     borderColor:'#818cf8',borderWidth:2.7,pointRadius:0,fill:false}
+  ]},
+  options:{
+    responsive:true,
+    parsing:false,
+    plugins:{legend:{labels:{color:'#7a90b0'}},tooltip:{callbacks:{label:function(ctx){
+      if(ctx.datasetIndex===3)return 'Regression line: '+ctx.parsed.y.toFixed(2)+' mg/dL';
+      return ctx.dataset.label.split(' (')[0]+': S_corr='+ctx.parsed.x.toFixed(4)+', bilirubin='+ctx.parsed.y.toFixed(2)+' mg/dL';
+    }}}},
+    scales:{
+      x:{type:'linear',title:{display:true,text:'Recalibrated S_corrected',color:'#7a90b0'},grid:{color:'#1e2d45'},ticks:{color:'#7a90b0'}},
+      y:{title:{display:true,text:'Bilirubin equivalent (mg/dL)',color:'#7a90b0'},
+         min:0,max:22,grid:{color:'#1e2d45'},ticks:{color:'#7a90b0'}}
+    }
+  }
+});
+
+// ── RESIDUAL CHART (all 1,000 samples, not 1,000 tiny bars) ────────────────
+var rCtx=document.getElementById('residChart').getContext('2d');
+var rChart=new Chart(rCtx,{
+  type:'scatter',
+  data:{datasets:[
+    {label:'Residuals (predicted − actual)',data:PD.map(function(p,i){return {x:p[3],y:residArr[i]};}),
+     backgroundColor:'rgba(129,140,248,.55)',pointRadius:2.5,pointHoverRadius:5},
+    {label:'Zero residual',type:'line',data:[{x:0,y:0},{x:22,y:0}],
+     borderColor:'rgba(52,211,153,.7)',pointRadius:0,borderDash:[5,4],borderWidth:1.5}
+  ]},
+  options:{responsive:true,parsing:false,
+    plugins:{legend:{labels:{color:'#7a90b0'}}},
+    scales:{
+      x:{type:'linear',title:{display:true,text:'Actual bilirubin equivalent (mg/dL)',color:'#7a90b0'},grid:{color:'#1e2d45'},ticks:{color:'#7a90b0'}},
+      y:{title:{display:true,text:'Prediction error (mg/dL)',color:'#7a90b0'},grid:{color:'#1e2d45'},ticks:{color:'#7a90b0'}}
+    }
+  }
+});
+
+// ── FEATURE CHART ─────────────────────────
+var fCtx=document.getElementById('featChart').getContext('2d');
+var fChart=new Chart(fCtx,{
+  type:'bar',
+  data:{
+    labels:['S_blue contribution','Melanin correction','Net S_corrected'],
+    datasets:[{label:'mg/dL contribution',data:[0,0,0],
+      backgroundColor:['rgba(96,165,250,.7)','rgba(248,113,113,.7)','rgba(129,140,248,.7)'],
+      borderRadius:4}]
+  },
+  options:{
+    indexAxis:'y',responsive:true,
+    plugins:{legend:{display:false}},
+    scales:{
+      x:{grid:{color:'#1e2d45'},ticks:{color:'#7a90b0'}},
+      y:{grid:{color:'#1e2d45'},ticks:{color:'#7a90b0'}}
+    }
+  }
+});
+
+// ── ZONE DISTRIBUTION CHART ───────────────
+var zdCtx=document.getElementById('zoneChart').getContext('2d');
+var zdChart=new Chart(zdCtx,{
+  type:'bar',
+  data:{
+    labels:['Band A (0–5)','Band B (5–12)','Band C (12–17)','Band D (>17)'],
+    datasets:[{label:'Reading count',data:[0,0,0,0],
+      backgroundColor:['rgba(16,185,129,.6)','rgba(245,158,11,.6)','rgba(239,68,68,.6)','rgba(220,38,38,.8)'],
+      borderRadius:4}]
+  },
+  options:{
+    responsive:true,
+    plugins:{legend:{display:false}},
+    scales:{
+      x:{grid:{color:'#1e2d45'},ticks:{color:'#7a90b0'}},
+      y:{grid:{color:'#1e2d45'},ticks:{color:'#7a90b0',stepSize:1}}
+    }
+  }
+});
+
+// ── PAGINATED, SEARCHABLE 1,000-SAMPLE CALIBRATION TABLE ──────────
+var calibPage=1,calibPageSize=25,calibFiltered=PD;
+function escapeTableText(str){
+  return String(str).replace(/[&<>"']/g,function(ch){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch];});
+}
+function filterPhantomTable(){
+  var q=document.getElementById('sampleSearch').value.trim().toLowerCase();
+  calibFiltered=PD.filter(function(p){
+    return !q||p[0].toLowerCase().includes(q)||p[4].toLowerCase().includes(q)||p[8].includes(q);
+  });
+  calibPage=1;
+  buildPhantomTable();
+}
+function changeCalibPage(change){
+  var totalPages=Math.max(1,Math.ceil(calibFiltered.length/calibPageSize));
+  calibPage=Math.max(1,Math.min(totalPages,calibPage+change));
+  buildPhantomTable();
+}
+function buildPhantomTable(){
+  var total=calibFiltered.length;
+  var totalPages=Math.max(1,Math.ceil(total/calibPageSize));
+  calibPage=Math.max(1,Math.min(totalPages,calibPage));
+  var lo=(calibPage-1)*calibPageSize;
+  var html=calibFiltered.slice(lo,lo+calibPageSize).map(function(p){
+    var sc=p[5]+M.k*p[6],pred=M.b0+M.b1*sc,res=pred-p[3];
+    var rc=Math.abs(res)<1.5?'var(--c-normal)':'var(--c-moderate)';
+    return '<tr><td>'+escapeTableText(p[0])+'</td><td>'+p[2].toFixed(4)+'</td><td>'+p[3].toFixed(2)+'</td><td>'+escapeTableText(p[4])+'</td>'+
+      '<td style="color:var(--blue-ch)">'+p[5].toFixed(4)+'</td>'+
+      '<td style="color:var(--red-ch)">'+p[6].toFixed(4)+'</td>'+
+      '<td style="color:var(--green-ch)">'+sc.toFixed(4)+'</td>'+
+      '<td style="color:var(--ml)">'+pred.toFixed(2)+'</td>'+
+      '<td style="color:'+rc+'">'+(res>=0?'+':'')+res.toFixed(2)+'</td>'+
+      '<td>'+p[8]+'</td></tr>';
+  }).join('');
+  document.getElementById('phantomTable').innerHTML=html||'<tr><td colspan="10" style="text-align:center;padding:20px">No matching samples</td></tr>';
+  document.getElementById('sampleStatus').textContent=total?'Showing '+(lo+1)+'–'+Math.min(lo+calibPageSize,total)+' of '+total+' samples':'No matching samples';
+  document.getElementById('calibPageIndicator').textContent='Page '+calibPage+' of '+totalPages;
+  document.getElementById('prevCalibPage').disabled=calibPage<=1;
+  document.getElementById('nextCalibPage').disabled=calibPage>=totalPages;
+}
+function downloadCalibrationCSV(){
+  var header='Sample_ID,Tartrazine_mM,Bili_Equiv_mg_dL,Skin_Tone,S_Blue,S_Melanin,Source_S_Corrected,Model_S_Corrected,ML_Predicted,Residual_PredMinusActual,Split\n';
+  var lines=PD.map(function(p,i){
+    return [p[0],p[2],p[3],p[4],p[5],p[6],p[7],scArr[i].toFixed(8),predArr[i].toFixed(8),residArr[i].toFixed(8),p[8]].join(',');
+  }).join('\n');
+  var a=document.createElement('a');
+  var url=URL.createObjectURL(new Blob([header+lines+'\n'],{type:'text/csv;charset=utf-8'}));
+  a.href=url;a.download='neox_continuous_1000_trained.csv';a.click();
+  setTimeout(function(){URL.revokeObjectURL(url);},1000);
+}
+buildPhantomTable();
+
+// ── REAL ESP32 DATA FETCH ─────────────────
+// ESP32 must be running NeoX firmware.
+// Connect device WiFi to: NeoX_Sensor / neox2024
+// ESP32 serves JSON at: http://192.168.4.1/data
+//
+// JSON format expected from ESP32:
+// {
+//   "blue":   0.8654,   ← S_blue  = ΔB/ΔG
+//   "melanin":0.7120,   ← S_melanin = ΔRr/ΔGr
+//   "green":  0.9210,   ← S_green (optional)
+//   "dB":     45,       ← raw delta blue counts
+//   "dG":     52,       ← raw delta green counts
+//   "dRr":    38,       ← raw delta red counts
+//   "dGr":    41,       ← raw delta green (red LED)
+//   "amb":    124       ← ambient clear channel
+// }
+
+var ESP32_URL = 'http://192.168.4.1/data';
+
+async function getESP32() {
+  try {
+    // Show connecting status
+    var ab = document.getElementById('alertBar');
+    ab.className = 'alert al-mild';
+    ab.textContent = '⟳ Fetching from ESP32 at ' + ESP32_URL + ' ...';
+
+    var response = await fetch(ESP32_URL, {
+      method: 'GET',
+      headers: { 'Accept': 'application/json' },
+      // 4 second timeout — ESP32 should respond in < 1s normally
+      signal: AbortSignal.timeout(4000)
+    });
+
+    if (!response.ok) {
+      throw new Error('HTTP ' + response.status);
+    }
+
+    var d = await response.json();
+
+    // Validate required fields
+    if (d.blue === undefined || d.melanin === undefined) {
+      throw new Error('Incomplete data from ESP32');
+    }
+
+    // Validate and return NUMERIC signals (not toFixed strings).
+    var blue = Number(d.blue), melanin = Number(d.melanin);
+    if (!Number.isFinite(blue) || !Number.isFinite(melanin)) {
+      throw new Error('Invalid numeric readings from ESP32');
+    }
+    // Map ESP32 JSON fields to dashboard variable names
+    return {
+      sb:  Number(blue.toFixed(4)),         // S_blue
+      sm:  Number(melanin.toFixed(4)),      // S_melanin
+      dB:  parseInt(d.dB)   || 0,              // delta blue counts
+      dG:  parseInt(d.dG)   || 0,              // delta green counts
+      dR:  parseInt(d.dRr)  || 0,              // delta red counts
+      amb: parseInt(d.amb)  || 0               // ambient clear
+    };
+
+  } catch (err) {
+    // Show error on dashboard — do NOT crash
+    var ab = document.getElementById('alertBar');
+    var msg = err.name === 'TimeoutError'
+      ? '⚠ ESP32 timeout — check probe is connected and powered'
+      : '⚠ Cannot reach ESP32 — ' + err.message;
+
+    ab.className = 'alert al-critical';
+    ab.textContent = msg +
+      ' | Connect WiFi to NeoX_Sensor then retry';
+
+    // Log to console for debugging
+    console.error('[NeoX] ESP32 fetch error:', err.message);
+    console.info('[NeoX] Expected URL:', ESP32_URL);
+    console.info('[NeoX] Steps: 1) Connect WiFi to NeoX_Sensor  ' +
+      '2) Confirm http://192.168.4.1/data shows JSON  3) Retry');
+
+    return null; // null signals failure to takeReading()
+  }
+}
+
+// ── TAKE READING ──────────────────────────
+async function takeReading(){
+  var raw = await getESP32();
+
+  // If ESP32 fetch failed — stop here, alert already shown
+  if (!raw) return;
+  var ml=mlPredict(raw.sb,raw.sm);
+  readN++;
+
+  // Zone
+  var zi=ml.bili<5?0:ml.bili<12?1:ml.bili<17?2:3;
+  zoneCounts[zi]++;
+
+  // Dashboard cards
+  document.getElementById('bilVal').textContent=ml.bili.toFixed(1);
+  document.getElementById('confVal').textContent=ml.conf+'%';
+  document.getElementById('sBlue').textContent=raw.sb;
+  document.getElementById('sMel').textContent=raw.sm;
+  document.getElementById('sCorr').textContent=ml.sc;
+  document.getElementById('readCount').textContent=readN;
+  document.getElementById('dRaw').textContent=raw.sb;
+  document.getElementById('dCorr').textContent=ml.sc;
+
+  // Channels
+  document.getElementById('chDB').textContent=raw.dB;
+  document.getElementById('chDG').textContent=raw.dG;
+  document.getElementById('chDR').textContent=raw.dR;
+  document.getElementById('chAmb').textContent=raw.amb;
+  document.getElementById('bDB').style.width=Math.min(raw.dB/250*100,100)+'%';
+  document.getElementById('bDG').style.width=Math.min(raw.dG/250*100,100)+'%';
+  document.getElementById('bDR').style.width=Math.min(raw.dR/250*100,100)+'%';
+  document.getElementById('bAmb').style.width=Math.min(raw.amb/250*100,100)+'%';
+
+  // Risk needle
+  document.getElementById('riskNeedle').style.left=Math.min(ml.bili/22*96,96)+'%';
+
+  // Zone pills
+  ['z0','z1','z2','z3'].forEach(function(z){document.getElementById(z).classList.remove('active');});
+  document.getElementById('z'+zi).classList.add('active');
+
+  // Alert
+  // Synthetic research demonstration: these bands are NOT clinical guidance.
+  var alertConf=[
+    ['al-normal', 'Prototype Band A — '+ml.bili.toFixed(1)+' mg/dL (synthetic model; not diagnostic)'],
+    ['al-mild', 'Prototype Band B — '+ml.bili.toFixed(1)+' mg/dL (synthetic model; not diagnostic)'],
+    ['al-moderate', 'Prototype Band C — '+ml.bili.toFixed(1)+' mg/dL (synthetic model; not diagnostic)'],
+    ['al-critical', 'Prototype Band D — '+ml.bili.toFixed(1)+' mg/dL (synthetic model; not diagnostic)']
+  ];
+  var ab=document.getElementById('alertBar');
+  ab.className='alert '+alertConf[zi][0];
+  ab.textContent=alertConf[zi][1];
+
+  // Trend chart
+  var t=new Date().toLocaleTimeString('en-IN',{hour12:false,hour:'2-digit',minute:'2-digit',second:'2-digit'});
+  tChart.data.labels.push(t);
+  tChart.data.datasets[0].data.push(ml.bili);
+  tChart.data.datasets[1].data.push(17);
+  if(tChart.data.labels.length>14){tChart.data.labels.shift();tChart.data.datasets.forEach(function(d){d.data.shift();});}
+  tChart.update();
+  document.getElementById('trendInfo').textContent=readN+' readings';
+
+  // ML tab
+  document.getElementById('ml-bili').textContent=ml.bili.toFixed(1);
+  document.getElementById('ml-lo').textContent=ml.lo.toFixed(1);
+  document.getElementById('ml-hi').textContent=ml.hi.toFixed(1);
+
+  // Model contribution chart
+  var rawC=parseFloat((M.b0+M.b1*raw.sb).toFixed(2));
+  var melC=parseFloat((M.b1*M.k*raw.sm).toFixed(2));
+  fChart.data.datasets[0].data=[rawC,melC,ml.bili];
+  fChart.update();
+
+  // Zone distribution
+  zdChart.data.datasets[0].data=[...zoneCounts];
+  zdChart.update();
+  document.getElementById('zoneDist').textContent=readN+' readings · '+zoneCounts.map(function(c,i){return ['N:'+c,'Ml:'+c,'Mo:'+c,'Cr:'+c][i];}).join(' · ');
+
+  // Live dot on calibration curve
+  if(cChart.data.datasets.length>4)cChart.data.datasets.splice(4,1);
+  cChart.data.datasets.push({
+    label:'Current reading',
+    data:[{x:ml.sc,y:ml.bili}],
+    backgroundColor:'#34d399',pointRadius:10,pointStyle:'star'
+  });
+  cChart.update();
+
+  // Log
+  var znames=['Band A','Band B','Band C','Band D'];
+  var zbadges=['badge-normal','badge-mild','badge-moderate','badge-critical'];
+  var patient=document.getElementById('patName').value||'—';
+  readings.unshift({
+    n:readN,t:t,patient:patient,
+    sb:raw.sb,sm:raw.sm,sc:ml.sc,
+    bili:ml.bili.toFixed(1),lo:ml.lo,hi:ml.hi,
+    zone:znames[zi],badge:zbadges[zi]
+  });
+  renderLog();
+}
+
+function renderLog(){
+  document.getElementById('logCount').textContent=readings.length+' entries';
+  var b=document.getElementById('logBody');
+  if(!readings.length){
+    b.innerHTML='<tr><td colspan="9" style="text-align:center;color:var(--text-dim);padding:28px">No readings yet</td></tr>';
+    return;
+  }
+  b.innerHTML=readings.map(function(r){
+    return '<tr>'+
+      '<td>'+r.n+'</td><td>'+r.t+'</td><td>'+escapeTableText(r.patient)+'</td>'+
+      '<td style="color:var(--blue-ch)">'+r.sb+'</td>'+
+      '<td style="color:var(--red-ch)">'+r.sm+'</td>'+
+      '<td style="color:var(--green-ch)">'+r.sc+'</td>'+
+      '<td style="font-weight:700">'+r.bili+'</td>'+
+      '<td style="color:var(--text-secondary);font-size:11px">'+r.lo+'–'+r.hi+'</td>'+
+      '<td><span class="badge '+r.badge+'">'+r.zone+'</span></td></tr>';
+  }).join('');
+}
+
+function manualPredict(){
+  var sb=parseFloat(document.getElementById('inp-sb').value);
+  var sm=parseFloat(document.getElementById('inp-sm').value);
+  var res=document.getElementById('manual-result');
+  if(isNaN(sb)||isNaN(sm)){
+    res.innerHTML='<span style="color:var(--c-moderate)">Enter valid numbers for both fields.</span>';return;
+  }
+  var ml=mlPredict(sb,sm);
+  var zi=ml.bili<5?0:ml.bili<12?1:ml.bili<17?2:3;
+  var zcol=['var(--c-normal)','var(--c-mild)','var(--c-moderate)','var(--c-critical)'][zi];
+  var zname=['Band A','Band B','Band C','Band D'][zi];
+  var zbadge=['badge-normal','badge-mild','badge-moderate','badge-critical'][zi];
+  res.innerHTML=
+    '<span style="color:'+zcol+';font-size:22px;font-weight:700">'+ml.bili.toFixed(1)+' mg/dL</span>'+
+    '  <span class="badge '+zbadge+'">'+zname+'</span>'+
+    '  <span style="color:var(--text-secondary);font-size:12px;margin-left:10px">'+
+    'Illustrative test-error range: '+ml.lo+' – '+ml.hi+' mg/dL &nbsp;·&nbsp; S_corrected: '+ml.sc+'</span>';
+}
+
+function clearAll(){
+  readings=[];readN=0;zoneCounts=[0,0,0,0];
+  document.getElementById('readCount').textContent='0';
+  tChart.data.labels=[];tChart.data.datasets.forEach(function(d){d.data=[];});tChart.update();
+  if(cChart.data.datasets.length>4)cChart.data.datasets.splice(4,1);cChart.update();
+  zdChart.data.datasets[0].data=[0,0,0,0];zdChart.update();
+  document.getElementById('trendInfo').textContent='no readings yet';
+  document.getElementById('zoneDist').textContent='no readings yet';
+  document.getElementById('alertBar').className='alert al-normal';
+  document.getElementById('alertBar').textContent='✓ System ready — place probe on sample and press "Take reading"';
+  ['bilVal','confVal','sBlue','sMel','sCorr','chDB','chDG','chDR','chAmb','dRaw','dCorr','ml-bili','ml-lo','ml-hi'].forEach(function(id){
+    var e=document.getElementById(id);if(e)e.textContent='—';
+  });
+  document.getElementById('riskNeedle').style.left='0%';
+  ['z0','z1','z2','z3'].forEach(function(z){document.getElementById(z).classList.remove('active');});
+  renderLog();
+}
+
+function exportCSV(){
+  if(!readings.length){alert('No readings to export yet.');return;}
+  var h='#,Time,Patient,S_blue,S_melanin,S_corrected,ML_bili_mgdL,Illustrative_low,Illustrative_high,Zone\n';
+  var rows=readings.slice().reverse().map(function(r){
+    return [r.n,r.t,r.patient,r.sb,r.sm,r.sc,r.bili,r.lo,r.hi,r.zone].join(',');
+  }).join('\n');
+  var a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([h+rows],{type:'text/csv'}));
+  a.download='neox_ml_readings.csv';a.click();
+}
+</script>
+</body>
+</html>

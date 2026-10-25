@@ -1,0 +1,62 @@
+{
+  "dataset": "Neo_X_Continuous_1000_Dataset.csv",
+  "samples": 1000,
+  "features": [
+    "S_Blue",
+    "S_Melanin"
+  ],
+  "target": "Bili_Equiv_mg_dL",
+  "method": "two-feature ordinary least squares (linear regression)",
+  "validation": "80/20 stratified split by Skin_Tone, random_state=42",
+  "model": {
+    "intercept": 43.77131883335552,
+    "coef_blue": -43.11374712782588,
+    "coef_melanin": -7.232630861481546,
+    "correction_k": 0.16775695325293496,
+    "formula": "estimated_mg_dL = intercept + coef_blue * (S_Blue + correction_k * S_Melanin)"
+  },
+  "train": {
+    "n": 800,
+    "r2": 0.9954805579918653,
+    "rmse_mg_dL": 0.3952636615689142,
+    "mae_mg_dL": 0.31630474110291534
+  },
+  "test": {
+    "n": 200,
+    "r2": 0.9948453888802344,
+    "rmse_mg_dL": 0.40757200514213043,
+    "mae_mg_dL": 0.32717100942707733
+  },
+  "all": {
+    "n": 1000,
+    "r2": 0.9953607780341442,
+    "rmse_mg_dL": 0.3977558014669396,
+    "mae_mg_dL": 0.31847799476774774
+  },
+  "test_by_skin_tone": {
+    "Fair": {
+      "n": 68,
+      "r2": 0.9955185850530008,
+      "rmse_mg_dL": 0.3942437738651431,
+      "mae_mg_dL": 0.3062137550504559
+    },
+    "Medium": {
+      "n": 69,
+      "r2": 0.9932093391414457,
+      "rmse_mg_dL": 0.45498578840419257,
+      "mae_mg_dL": 0.37876122841328885
+    },
+    "Dark": {
+      "n": 63,
+      "r2": 0.9955992978918908,
+      "rmse_mg_dL": 0.3644966258807615,
+      "mae_mg_dL": 0.29328796478519914
+    }
+  },
+  "illustrative_error_band_plus_minus_mg_dL": 0.7988411300785756,
+  "limitations": [
+    "Synthetic data only; not patient, clinical, or hardware validation.",
+    "The uploaded S_Corrected is NOT the fitted model correction and is preserved separately.",
+    "No inference about real-world generalization, treatment, or diagnostic safety."
+  ]
+}
